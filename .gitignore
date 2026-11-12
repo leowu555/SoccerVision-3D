@@ -1,0 +1,50 @@
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Node
+node_modules/
+
+# Environment / secrets
+.env
+.env.*
+!.env.example
+
+# Runtime data: uploads, artifacts, local samples, database
+data/*
+!data/.gitkeep
+!data/samples/
+data/samples/*
+!data/samples/README.md
+
+# Model weights and checkpoints
+models/*
+!models/.gitkeep
+*.pth
+*.pt
+*.onnx
+*.engine
+*.ckpt
+*.safetensors
+
+# Generated media
+*.mp4
+*.mov
+*.mkv
+*.avi
+*.ogv
+*.webm
+
+# OS / editors
+.DS_Store
+.idea/
+.vscode/

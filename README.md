@@ -1,6 +1,6 @@
 # SoccerVision 3D
 
-An open-source computer-vision pipeline for soccer video, built in phases toward multi-object tracking, team classification, pitch calibration, and 3D scene reconstruction.
+This is an open-source computer-vision pipeline for soccer videos, built in phases toward multi-object tracking, team classification, pitch calibration, and 3D scene reconstruction.
 
 **Current status: Phase 1 — person detection.** You upload an MP4. A pretrained [RF-DETR](https://github.com/roboflow/rf-detr) model detects the COCO `person` class on every analyzed frame, and you get an annotated, browser-playable video plus versioned JSON artifacts.
 
