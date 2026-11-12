@@ -97,7 +97,7 @@ source .venv/bin/activate
 pip install -e ".[ml,api,dev]"
 cp .env.example .env                 # optional; defaults work as-is
 
-# Optional: fetch weights ahead of time (otherwise downloaded on first analysis, MD5-verified)
+# Optional: fetch weights ahead of time (otherwise downloaded on first analysis; MD5-verified, and a corrupt file is rejected when downloads are disabled)
 python scripts/download_weights.py --model rfdetr-nano
 
 uvicorn soccervision_api.main:app --port 8000
@@ -142,6 +142,7 @@ The CLI writes the same three artifacts as the API and prints a JSON summary. Ex
 | `GET` | `/api/v1/health` | Versions, available devices, model and weight status, limits, defaults |
 | `POST` | `/api/v1/videos` | Upload an MP4 (`multipart/form-data`, field `file`) |
 | `GET` | `/api/v1/videos` · `/api/v1/videos/{id}` | List videos and get one video's metadata and latest job |
+| `DELETE` | `/api/v1/videos/{id}` | Delete a video, its jobs and all artifacts (`204`; `409` while a job is active) |
 | `GET` | `/api/v1/videos/{id}/source` | Original upload (supports HTTP Range) |
 | `POST` | `/api/v1/videos/{id}/analyze` | Queue an analysis job (`202`; `409` if one is already active) |
 | `GET` | `/api/v1/jobs/{job_id}` | Job status, progress, error, artifact URLs |
@@ -187,7 +188,7 @@ The Dockerfile has not been built in the development environment (Docker was not
 - Accuracy has not been measured on a labelled soccer dataset. See [docs/MODEL_EVALUATION.md](docs/MODEL_EVALUATION.md).
 - Uploads must be MP4. The CLI accepts any container FFmpeg can read. Audio is not carried into the annotated video.
 - Single host only. SQLite and local disk, no authentication, and not designed for public internet exposure.
-- Uploaded videos and artifacts are never deleted automatically.
+- There is no retention policy. Uploads and artifacts stay until you delete the video (the **Delete** button on the analysis page, or `DELETE /api/v1/videos/{id}`).
 
 ## Licensing
 

@@ -168,11 +168,7 @@ export function UploadForm() {
                   ]}
                 />
                 <div className="mt-6 border-t border-slate-800 pt-5">
-                  <AnalysisOptions
-                    key={health.data ? "server-defaults" : "fallback-defaults"}
-                    defaults={health.data?.defaults}
-                    onChange={setOptions}
-                  />
+                  <AnalysisOptions defaults={health.data?.defaults} onChange={setOptions} />
                 </div>
                 <div className="mt-6 flex gap-3">
                   <Button onClick={startAnalysis} disabled={phase.kind === "submitting"}>

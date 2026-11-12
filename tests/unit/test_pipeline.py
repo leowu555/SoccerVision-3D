@@ -14,8 +14,10 @@ from soccervision.pipeline import (
     load_detections,
     load_run_metadata,
     run_detection_pipeline,
+    runner,
 )
 from soccervision.schemas import ARTIFACT_SCHEMA_VERSION, InferenceStatus, RunStatus
+from soccervision.schemas.video import VideoProbe
 from soccervision.vision.video import VideoDecoder, probe_video
 from support import FakeDetectorFactory, make_test_video
 
@@ -194,3 +196,20 @@ class TestFailures:
             _run(clip, tmp_path / "run", factory, max_duration_seconds=1.0)
         assert info.value.code == "video_limit_exceeded"
         assert factory.instances == []
+
+    def test_duration_limit_enforced_on_decoded_frames(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        clip = make_test_video(tmp_path / "long.mp4", frames=36, fps=12)
+
+        def underreporting_probe(path: Path, *, require_mp4: bool = False) -> VideoProbe:
+            return probe_video(path, require_mp4=require_mp4).model_copy(
+                update={"duration_seconds": 0.0}
+            )
+
+        monkeypatch.setattr(runner, "probe_video", underreporting_probe)
+        with pytest.raises(PipelineRunError) as info:
+            _run(clip, tmp_path / "run", FakeDetectorFactory(), max_duration_seconds=1.0)
+        assert info.value.code == "video_limit_exceeded"
+        assert "Decoded frames run past" in info.value.message
+        assert not (tmp_path / "run" / ANNOTATED_VIDEO_FILE).exists()

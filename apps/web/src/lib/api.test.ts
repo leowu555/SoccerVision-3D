@@ -45,6 +45,11 @@ describe("request", () => {
     });
   });
 
+  it("accepts an empty 204 body", async () => {
+    const fetchImpl = vi.fn(async () => new Response(null, { status: 204 }));
+    await expect(__testing.request("/x", { method: "DELETE" }, fetchImpl)).resolves.toBeNull();
+  });
+
   it("reports network failures distinctly", async () => {
     const fetchImpl = vi.fn(async () => {
       throw new TypeError("fetch failed");

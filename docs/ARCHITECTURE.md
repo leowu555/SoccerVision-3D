@@ -73,7 +73,8 @@ The requirements were that work never runs inside a request, concurrency is boun
 | Worker exits non-zero without recording a result | Dispatcher marks `FAILED` / `worker_crashed` |
 | Worker cannot be launched | `FAILED` / `worker_launch_failed` |
 | API shutdown (SIGINT/SIGTERM) | Workers receive SIGTERM, which raises `KeyboardInterrupt`, and the job is marked `FAILED` / `interrupted` |
-| API killed hard (SIGKILL) and restarted | On startup every `PROCESSING` job becomes `FAILED` / `interrupted`; `PENDING` jobs resume |
+| API killed hard (SIGKILL) and restarted | On startup every `PROCESSING` job becomes `FAILED` / `interrupted`, and its leftover `.partial` files are removed; `PENDING` jobs resume |
+| Video deleted (`DELETE /api/v1/videos/{id}`) | Refused with `409` while a job is `PENDING` or `PROCESSING`; otherwise the rows (jobs cascade), upload directory and artifact directory are removed |
 | Orphaned worker still running after such a restart | Its next progress update sees that the job is no longer `PROCESSING`, so it stops (`job_abandoned` in `metadata.json`) and cleans up |
 
 ### Honest outputs
@@ -108,8 +109,9 @@ Artifacts are served only by whitelisted name, and only if the job's recorded `a
 ## Data flow for one analysis
 
 1. Probe the input and check limits, then compute the SHA-256 of the input.
-2. Load the model with the factory, timing it, and run a warm-up prediction.
+2. Load the model with the factory, timing it, and run a warm-up prediction. With downloads disabled, the checkpoint's MD5 is checked against the pinned value before rfdetr loads it, because rfdetr would otherwise re-download a mismatched file.
 3. For each decoded frame:
+   - Stop with `video_limit_exceeded` if decoded timestamps pass the duration limit, in case the container's duration is wrong.
    - If `index % stride == 0`, run the detector, filter to the target classes at or above the threshold, drop non-finite boxes, clip to the frame (counted), and discard degenerate boxes (counted).
    - Draw the annotation and HUD, and encode to `annotated.mp4.partial`.
 4. Write `detections.json`, rename the video to `annotated.mp4`, then write `metadata.json` last as the commit marker.

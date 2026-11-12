@@ -320,6 +320,9 @@ def _process_frames(
     expected = probe.frame_count
     report_every = max(1, (expected or 0) // _PROGRESS_STEPS) if expected else 10
     stride = config.inference_stride
+    # Container durations can be missing or wrong, so the limit is enforced on decoded timestamps too.
+    limit = config.max_duration_seconds
+    first_timestamp: float | None = None
 
     with (
         VideoDecoder(input_path) as decoder,
@@ -338,6 +341,13 @@ def _process_frames(
                 raise InvalidVideoError(
                     f"Frame {frame.index} is {width}x{height}, but the stream is "
                     f"{probe.width}x{probe.height}; mid-stream resolution changes are unsupported."
+                )
+            if first_timestamp is None:
+                first_timestamp = frame.timestamp_seconds
+            if limit is not None and frame.timestamp_seconds - first_timestamp > limit:
+                raise VideoLimitExceededError(
+                    f"Decoded frames run past the configured maximum of {limit:.0f}s, although "
+                    f"the container reported {probe.duration_seconds:.1f}s."
                 )
 
             if frame.index % stride == 0:

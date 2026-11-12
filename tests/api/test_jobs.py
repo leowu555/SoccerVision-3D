@@ -199,12 +199,19 @@ class TestJobRunner:
                 "/api/v1/videos", files={"file": ("b.mp4", fh, "video/mp4")}
             ).json()
         queued = self._submit(client, other_video["video_id"])
+        run_dir = settings.artifact_dir / uploaded_video / interrupted
+        run_dir.mkdir(parents=True)
+        partial = run_dir / ".annotated.mp4.partial"
+        partial.write_bytes(b"half-written")
+        (run_dir / "worker.log").write_text("log")
 
         JobRunner(db, settings, launcher=lambda job, log: _FakeHandle(None)).reconcile()
 
         failed = db.get_job(interrupted)
         assert failed is not None and failed.status is JobStatus.FAILED
         assert failed.error_code == "interrupted" and failed.error_message == INTERRUPTED_ON_RESTART
+        assert not partial.exists()
+        assert (run_dir / "worker.log").exists()
         assert db.get_job(queued).status is JobStatus.PENDING  # type: ignore[union-attr]
 
     def test_concurrency_is_bounded(

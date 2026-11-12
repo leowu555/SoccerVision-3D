@@ -54,6 +54,13 @@ export function VideoComparison({ video, results, onTimeUpdate, seekRequest }: P
       if (synced && follower) follower.playbackRate = leader.playbackRate;
     };
 
+    if (synced && follower) {
+      align();
+      onRate();
+      if (leader.paused) follower.pause();
+      else void follower.play().catch(() => undefined);
+    }
+
     leader.addEventListener("timeupdate", report);
     leader.addEventListener("timeupdate", align);
     leader.addEventListener("seeked", align);
@@ -96,7 +103,7 @@ export function VideoComparison({ video, results, onTimeUpdate, seekRequest }: P
           <video
             ref={originalRef}
             src={apiUrl(video.source_url)}
-            controls
+            controls={!synced || !annotatedUrl}
             muted
             playsInline
             preload="metadata"

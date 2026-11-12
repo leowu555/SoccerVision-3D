@@ -81,6 +81,8 @@ export const api = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     }),
+  deleteVideo: (videoId: string) =>
+    request<null>(`/api/v1/videos/${encodeURIComponent(videoId)}`, { method: "DELETE" }),
 };
 
 export interface UploadHandle {

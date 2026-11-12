@@ -113,3 +113,13 @@ def _bounded_copy(source: BinaryIO, destination: Path, max_bytes: int) -> int:
 
 def source_path(settings: Settings, video: VideoMetadata) -> Path:
     return settings.upload_dir / video.source_path
+
+
+def delete_video(*, video_id: str, settings: Settings, db: Database) -> bool:
+    """Delete a video's rows, upload and artifacts. Raises JobConflictError if a job is active."""
+    if not db.delete_video(video_id):
+        return False
+    for directory in (settings.upload_dir / video_id, settings.artifact_dir / video_id):
+        shutil.rmtree(directory, ignore_errors=True)
+    logger.info("Deleted video %s and its artifacts", video_id)
+    return True

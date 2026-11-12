@@ -1,7 +1,7 @@
 from typing import Annotated
 
 from fastapi import APIRouter, Body, File, Query, UploadFile
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from pydantic import ValidationError
 
 from soccervision.config import DetectorConfig, PipelineConfig
@@ -19,7 +19,7 @@ from soccervision_api.schemas import (
 )
 from soccervision_api.services import results as results_service
 from soccervision_api.services.jobs import submit_job
-from soccervision_api.services.uploads import source_path, store_upload
+from soccervision_api.services.uploads import delete_video, source_path, store_upload
 from soccervision_api.settings import Settings
 
 router = APIRouter(prefix="/videos", tags=["videos"])
@@ -50,6 +50,22 @@ def list_videos(db: DbDep, limit: Annotated[int, Query(ge=1, le=200)] = 50) -> V
 def get_video(video_id: str, db: DbDep) -> VideoResponse:
     video = require_video(db, video_id)
     return VideoResponse.from_video(video, db.latest_job(video_id))
+
+
+@router.delete("/{video_id}", status_code=204)
+def remove_video(video_id: str, db: DbDep, settings: SettingsDep) -> Response:
+    require_video(db, video_id)
+    try:
+        if not delete_video(video_id=video_id, settings=settings, db=db):
+            raise ApiError(404, "video_not_found", f"Video {video_id} does not exist.")
+    except JobConflictError as exc:
+        raise ApiError(
+            409,
+            "job_already_active",
+            "This video has a queued or running analysis job; wait for it to finish.",
+            {"job_id": exc.active_job_id},
+        ) from exc
+    return Response(status_code=204)
 
 
 @router.get("/{video_id}/source", response_class=FileResponse)

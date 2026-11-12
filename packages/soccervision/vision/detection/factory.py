@@ -7,7 +7,7 @@ from soccervision.vision.detection.rfdetr import RFDETR_VARIANTS, RFDETRDetector
 
 
 def weights_path_for(name: DetectorName, weights_dir: Path) -> Path:
-    return weights_dir / RFDETR_VARIANTS[name][1]
+    return weights_dir / RFDETR_VARIANTS[name].weights_filename
 
 
 def create_detector(

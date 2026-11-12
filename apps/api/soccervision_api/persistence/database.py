@@ -149,6 +149,24 @@ class Database:
             ).fetchall()
         return [self._video_from_row(row) for row in rows]
 
+    def delete_video(self, video_id: str) -> bool:
+        """Delete a video and its job rows unless a job is active. Raises JobConflictError."""
+        with self.connect() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            try:
+                active = conn.execute(
+                    "SELECT job_id FROM jobs WHERE video_id = ? AND status IN (?, ?)",
+                    (video_id, *_ACTIVE),
+                ).fetchone()
+                if active:
+                    raise JobConflictError(active["job_id"])
+                deleted = conn.execute("DELETE FROM videos WHERE video_id = ?", (video_id,))
+                conn.execute("COMMIT")
+            except BaseException:
+                conn.execute("ROLLBACK")
+                raise
+        return deleted.rowcount > 0
+
     @staticmethod
     def _video_select() -> str:
         return """SELECT v.*, (SELECT j.status FROM jobs j WHERE j.video_id = v.video_id

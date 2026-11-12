@@ -9,7 +9,7 @@ import importlib.metadata
 import logging
 from collections.abc import Sequence
 from pathlib import Path
-from typing import Any
+from typing import Any, NamedTuple
 
 import numpy as np
 import numpy.typing as npt
@@ -21,11 +21,27 @@ from soccervision.vision.detection.base import RawDetection
 
 logger = logging.getLogger(__name__)
 
-# name -> (rfdetr class, weights filename the rfdetr registry knows how to download)
-RFDETR_VARIANTS: dict[DetectorName, tuple[str, str]] = {
-    "rfdetr-nano": ("RFDETRNano", "rf-detr-nano.pth"),
-    "rfdetr-small": ("RFDETRSmall", "rf-detr-small.pth"),
-    "rfdetr-medium": ("RFDETRMedium", "rf-detr-medium.pth"),
+
+class RFDETRVariant(NamedTuple):
+    class_name: str
+    weights_filename: str
+    """Filename the rfdetr registry knows how to download."""
+    weights_md5: str
+    """Published MD5 from ``rfdetr.assets.model_weights.ModelWeights`` (rfdetr 1.11)."""
+
+
+# rfdetr silently re-downloads and overwrites a checkpoint whose MD5 does not match its registry,
+# whatever we pass for downloads, so integrity is checked here before rfdetr ever sees the file.
+RFDETR_VARIANTS: dict[DetectorName, RFDETRVariant] = {
+    "rfdetr-nano": RFDETRVariant(
+        "RFDETRNano", "rf-detr-nano.pth", "fb6504cce7fbdc783f7a46991f07639f"
+    ),
+    "rfdetr-small": RFDETRVariant(
+        "RFDETRSmall", "rf-detr-small.pth", "fb37061c1af7bace359c91b723a8d5c1"
+    ),
+    "rfdetr-medium": RFDETRVariant(
+        "RFDETRMedium", "rf-detr-medium.pth", "7223f764a87b863f02eb8d52bf0ce2ee"
+    ),
 }
 
 
@@ -47,6 +63,22 @@ def _md5(path: Path) -> str:
     return digest.hexdigest()
 
 
+def verify_weights(weights_path: Path, variant: RFDETRVariant, name: str) -> str:
+    """Return the checkpoint's MD5, raising ModelUnavailableError if it is missing or corrupt."""
+    if not weights_path.is_file():
+        raise ModelUnavailableError(
+            f"Weights for {name} not found at {weights_path} and downloads are disabled. "
+            "Run `python scripts/download_weights.py` or enable downloads."
+        )
+    actual = _md5(weights_path)
+    if actual != variant.weights_md5:
+        raise ModelUnavailableError(
+            f"Weights at {weights_path} failed the integrity check (md5 {actual}, expected "
+            f"{variant.weights_md5}). Delete the file and run `python scripts/download_weights.py`."
+        )
+    return actual
+
+
 class RFDETRDetector:
     def __init__(
         self,
@@ -56,13 +88,11 @@ class RFDETRDetector:
         weights_dir: Path,
         allow_download: bool,
     ) -> None:
-        class_name, weights_filename = RFDETR_VARIANTS[config.name]
+        variant = RFDETR_VARIANTS[config.name]
+        weights_filename = variant.weights_filename
         weights_path = weights_dir / weights_filename
-        if not weights_path.is_file() and not allow_download:
-            raise ModelUnavailableError(
-                f"Weights for {config.name} not found at {weights_path} and downloads are disabled. "
-                "Run `python scripts/download_weights.py` or enable downloads."
-            )
+        if not allow_download:
+            verify_weights(weights_path, variant, config.name)
 
         try:
             rfdetr = importlib.import_module("rfdetr")
@@ -73,11 +103,12 @@ class RFDETRDetector:
 
         weights_dir.mkdir(parents=True, exist_ok=True)
         try:
-            self._model: Any = getattr(rfdetr, class_name)(
+            self._model: Any = getattr(rfdetr, variant.class_name)(
                 pretrain_weights=str(weights_path), device=device
             )
         except Exception as exc:
             raise ModelUnavailableError(f"Failed to load {config.name} on {device}: {exc}") from exc
+        weights_md5 = verify_weights(weights_path, variant, config.name)
 
         model_config = self._model.model_config
         self._shape: tuple[int, int] | None = None
@@ -101,13 +132,18 @@ class RFDETRDetector:
             label_space="coco-80",
             license="Apache-2.0",
             weights_file=weights_filename,
-            weights_md5=_md5(weights_path),
+            weights_md5=weights_md5,
             input_resolution=resolution,
             device=device,
             framework_versions=_package_versions("rfdetr", "torch", "torchvision", "supervision"),
         )
         # First inference compiles kernels (notably on MPS); keep it out of per-frame timings.
-        self._predict(np.zeros((resolution, resolution, 3), dtype=np.uint8))
+        try:
+            self._predict(np.zeros((resolution, resolution, 3), dtype=np.uint8))
+        except Exception as exc:
+            raise ModelUnavailableError(
+                f"Warm-up inference failed for {config.name} on {device}: {exc}"
+            ) from exc
 
     @property
     def info(self) -> ModelInfo:

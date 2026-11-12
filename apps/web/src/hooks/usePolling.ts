@@ -10,8 +10,8 @@ export interface PollingState<T> {
 }
 
 /**
- * Fetch on mount and re-fetch every `intervalMs` while `shouldPoll(data)` is true. Requests never
- * overlap, and stale responses from a previous `key` are discarded.
+ * Fetch on mount and re-fetch every `intervalMs` while `shouldPoll(data)` is true. Requests for the
+ * same `key` never overlap, and stale responses from a previous `key` are discarded.
  */
 export function usePolling<T>(
   key: string,
@@ -24,7 +24,7 @@ export function usePolling<T>(
   const fetcherRef = useRef(fetcher);
   const shouldPollRef = useRef(shouldPoll);
   const generation = useRef(0);
-  const inFlight = useRef(false);
+  const inFlightGeneration = useRef<number | null>(null);
 
   useEffect(() => {
     fetcherRef.current = fetcher;
@@ -32,8 +32,9 @@ export function usePolling<T>(
   });
 
   const run = useCallback(async (gen: number): Promise<T | undefined> => {
-    if (inFlight.current) return undefined;
-    inFlight.current = true;
+    // A request for an older key must not block the first fetch for a new key.
+    if (inFlightGeneration.current === gen) return undefined;
+    inFlightGeneration.current = gen;
     try {
       const result = await fetcherRef.current();
       if (gen !== generation.current) return undefined;
@@ -44,7 +45,7 @@ export function usePolling<T>(
       if (gen === generation.current) setError(err instanceof Error ? err : new Error(String(err)));
       return undefined;
     } finally {
-      inFlight.current = false;
+      if (inFlightGeneration.current === gen) inFlightGeneration.current = null;
       if (gen === generation.current) setLoading(false);
     }
   }, []);

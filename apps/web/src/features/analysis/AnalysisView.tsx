@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useCallback, useState } from "react";
 import { Alert, Button, ButtonLink, Card, Skeleton, Spinner, StatusBadge } from "@/components/ui/primitives";
 import { DetectionStats } from "@/features/analysis/DetectionStats";
@@ -40,8 +41,22 @@ export function AnalysisView({ videoId }: { videoId: string }) {
   const [rerunOptions, setRerunOptions] = useState<AnalysisOptionsValue>({});
   const [submitting, setSubmitting] = useState(false);
   const [actionError, setActionError] = useState<string>();
+  const router = useRouter();
 
   const onSeek = useCallback((time: number) => setSeekRequest({ time, nonce: Date.now() }), []);
+
+  async function remove() {
+    if (!window.confirm("Delete this video, its analysis runs and all generated artifacts?")) return;
+    setSubmitting(true);
+    setActionError(undefined);
+    try {
+      await api.deleteVideo(videoId);
+      router.push("/");
+    } catch (err) {
+      setActionError(err instanceof ApiClientError ? err.message : "Could not delete the video.");
+      setSubmitting(false);
+    }
+  }
 
   async function rerun() {
     setSubmitting(true);
@@ -100,10 +115,15 @@ export function AnalysisView({ videoId }: { videoId: string }) {
               {showRerun ? "Close" : "Run again"}
             </Button>
           ) : null}
+          {!active ? (
+            <Button variant="ghost" onClick={remove} disabled={submitting}>
+              Delete
+            </Button>
+          ) : null}
         </div>
       </div>
 
-      {actionError ? <Alert title="Analysis request failed">{actionError}</Alert> : null}
+      {actionError ? <Alert title="Request failed">{actionError}</Alert> : null}
 
       {showRerun && !active ? (
         <Card>

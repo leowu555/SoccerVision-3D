@@ -136,10 +136,17 @@ No accuracy metrics (mAP, precision or recall) exist yet. Qualitatively, Nano at
 
 ## 4. Known issues and open questions (please check)
 
-- **Streamed-page reveal delay in the automation browser.** In Cursor's embedded automation browser, the analysis page (`/videos/[id]`, a Suspense boundary resolved from dynamic `params`) sometimes stayed on its skeleton for a long time. The server HTML stream was complete in about 20 ms, including React's `$RC` reveal script. Content appeared once the webview painted a frame, which a screenshot would trigger. I believe this is the webview throttling `requestAnimationFrame`, not an app bug, but **it hasn't been checked in a normal desktop browser**. If it reproduces there, converting the page to a client component that reads `useParams()` would remove the streamed boundary.
-- **One unexplained analyze request with confidence 0.65.** During UI automation, one job was submitted with `confidence_threshold: 0.65` although the slider displayed 0.50 just before. Replaying the identical steps submitted 0.50 correctly. The most likely cause is outside interaction with the visible browser tab, but it isn't proven. The run's results correctly display 0.65.
+Fixed during finalization (each with tests):
+
+- **Corrupt weights were silently replaced.** With a truncated `rf-detr-nano.pth` and `--no-download`, rfdetr logged an MD5 mismatch, re-downloaded and overwrote the file, and the run succeeded. Pinned MD5s now live in `RFDETR_VARIANTS` (a test checks them against the installed rfdetr registry). With downloads disabled, a mismatch raises `model_unavailable` before rfdetr is imported, and the file is left untouched. The loaded file is re-verified after load, and warm-up failures now raise `model_unavailable` instead of an unclassified error.
+- **The duration limit trusted the container.** The pipeline now also stops with `video_limit_exceeded` once decoded timestamps pass `max_duration_seconds`. No real file with a wrong duration was found (fragmented MP4s reported correctly), so this is defence in depth.
+- **Hard-killed workers left `.annotated.mp4.partial` files.** Startup reconciliation now removes them for the jobs it marks `interrupted`.
+- **The original player could drift from the annotated one.** While "Sync" is on, the original no longer shows its own controls, and re-enabling sync realigns time, rate and play state immediately.
+
+- **Analysis-page loading delay (fixed in finalization).** Measured in headless desktop Chrome, detection statistics appeared 1.65–1.86 s after navigation. The cause was `usePolling`: when the video loaded, the results key changed, but the new key's first fetch was skipped because the old key's request was still in flight. It then waited a full 1.5 s poll interval, and the old response was discarded as stale. In-flight tracking is now per key, and statistics appear in 0.34–0.43 s. The remaining ~300 ms is React's intentional batching of Suspense reveals. Cursor's embedded browser throttles timers and animation frames, which stretched the same bug into multi-second stalls there.
+- **One unexplained analyze request with confidence 0.65 (not reproduced).** During UI automation, one job (`a0237ca9…`) was submitted with `confidence_threshold: 0.65` although the slider displayed 0.50 just before. Every other job in the database used 0.50, the server default is 0.50, and replaying the steps submitted 0.50. One real mechanism for silently changed settings was found and fixed: if `/health` loaded after the form rendered, the settings panel remounted and reset the user's edits. It now adopts server defaults only if the user hasn't touched the form. It's still unproven whether that caused the 0.65 job.
 - **Encoding sensitivity.** A CLI run on the original Ogg/Theora file gave 3,520 detections, against 3,502 on the H.264 conversion. Borderline detections flip with lossy re-encoding.
-- **No cleanup.** Uploads and artifacts are never deleted, and there's no delete endpoint.
+- **No retention policy.** `DELETE /api/v1/videos/{id}` and a Delete button now remove a video's rows, upload and artifacts (refused while a job is active), but nothing expires automatically.
 - **No authentication.** It's a single-host design and not hardened for public exposure.
 - **Starlette deprecation warning.** Starlette's TestClient warns that `httpx` should become `httpx2` in the future (only a warning).
 
@@ -170,7 +177,7 @@ No accuracy metrics (mAP, precision or recall) exist yet. Qualitatively, Nano at
 | 8 | Confidence and coordinates persisted | ✅ (`detections.json`) |
 | 9 | Job status queryable | ✅ |
 | 10 | Failures surfaced meaningfully | ✅ (error codes, messages, UI hints) |
-| 11 | Output video plays in the browser | ✅ (H.264, loads and seeks; continuous playback is limited in the automation browser) |
+| 11 | Output video plays in the browser | ✅ (H.264; plays, seeks and stays in sync with the original in headless Chrome) |
 | 12 | CLI analyzes a clip on its own | ✅ |
 | 13 | Unit tests pass without GPU or model downloads | ✅ |
 | 14 | Reproducible setup instructions | ✅ (Docker and CUDA paths untested) |
@@ -179,10 +186,10 @@ No accuracy metrics (mAP, precision or recall) exist yet. Qualitatively, Nano at
 ## 7. Suggested next steps
 
 1. **Commit Phase 1** (and rename or recreate the GitHub repo), then confirm that GitHub Actions passes.
-2. **Verify in a normal browser** the analysis-page reveal and playback concern from section 4.
+2. **Spot-check in a headed desktop browser.** Reveal timing and playback sync were verified in headless Chrome, not by hand.
 3. **Build the evaluation harness** (roadmap Phase 6, pulled forward). Measure detection mAP and recall by box size for N/S/M × input resolution on a small, legally usable labelled soccer set, before choosing the default model and starting tracking.
 4. **Phase 2: multi-object tracking.** Use ByteTrack or BoT-SORT, producing `TrackObservation` with observed or predicted flags, evaluated with HOTA, IDF1 and ID switches. The `ObservationSource` enum and the per-frame `analyzed`/`skipped` records were designed to support this.
 5. **Smaller improvements:**
    - A persistent model-loaded worker, to avoid the ~6 s load per job.
-   - Upload and artifact deletion with a retention policy.
+   - An automatic retention policy (manual deletion exists).
    - Optional tiled inference for small players.

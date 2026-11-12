@@ -2,6 +2,7 @@ from pathlib import Path
 
 from fastapi.testclient import TestClient
 
+from soccervision.schemas.job import JobStatus
 from soccervision_api.services.uploads import sanitize_filename
 from support import make_test_video
 
@@ -96,6 +97,44 @@ class TestVideoQueries:
         assert response.status_code == 206
         assert len(response.content) == 100
         assert response.headers["content-type"] == "video/mp4"
+
+
+class TestDeleteVideo:
+    def test_removes_rows_upload_and_artifacts(
+        self, client: TestClient, uploaded_video: str
+    ) -> None:
+        settings = client.app.state.settings  # type: ignore[attr-defined]
+        db = client.app.state.db  # type: ignore[attr-defined]
+        job_id = client.post(f"/api/v1/videos/{uploaded_video}/analyze").json()["job_id"]
+        assert db.transition(job_id, JobStatus.PROCESSING)
+        assert db.transition(job_id, JobStatus.FAILED, error_code="x", error_message="x")
+        artifacts = settings.artifact_dir / uploaded_video / job_id
+        artifacts.mkdir(parents=True)
+        (artifacts / "metadata.json").write_text("{}")
+
+        response = client.delete(f"/api/v1/videos/{uploaded_video}")
+
+        assert response.status_code == 204
+        assert not (settings.upload_dir / uploaded_video).exists()
+        assert not (settings.artifact_dir / uploaded_video).exists()
+        assert db.get_job(job_id) is None
+        assert client.get(f"/api/v1/videos/{uploaded_video}").status_code == 404
+        assert client.get("/api/v1/videos").json()["videos"] == []
+
+    def test_refuses_while_job_is_active(self, client: TestClient, uploaded_video: str) -> None:
+        settings = client.app.state.settings  # type: ignore[attr-defined]
+        job_id = client.post(f"/api/v1/videos/{uploaded_video}/analyze").json()["job_id"]
+
+        response = client.delete(f"/api/v1/videos/{uploaded_video}")
+
+        assert response.status_code == 409
+        assert response.json()["error"]["details"]["job_id"] == job_id
+        assert (settings.upload_dir / uploaded_video / "source.mp4").is_file()
+
+    def test_unknown_video(self, client: TestClient) -> None:
+        response = client.delete("/api/v1/videos/does-not-exist")
+        assert response.status_code == 404
+        assert response.json()["error"]["code"] == "video_not_found"
 
 
 def test_sanitize_filename() -> None:

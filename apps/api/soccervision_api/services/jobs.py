@@ -116,6 +116,11 @@ class JobRunner:
             logger.warning(
                 "Marked %d interrupted job(s) as failed: %s", len(failed), ", ".join(failed)
             )
+        for job_id in failed:
+            job = self._db.get_job(job_id)
+            if job is not None:
+                for partial in run_dir_for(self._settings, job).glob(".*.partial"):
+                    partial.unlink(missing_ok=True)
         return failed
 
     def start(self) -> None:

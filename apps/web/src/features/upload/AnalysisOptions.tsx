@@ -27,13 +27,26 @@ export function AnalysisOptions({
   const [device, setDevice] = useState<DeviceName>(defaults?.device ?? "auto");
   const [confidence, setConfidence] = useState(defaults?.confidence_threshold ?? 0.5);
   const [stride, setStride] = useState(defaults?.inference_stride ?? 1);
+  const [touched, setTouched] = useState(false);
+  const [appliedDefaults, setAppliedDefaults] = useState(defaults);
+
+  // Server defaults can arrive after the form renders; adopt them only if the user has not edited.
+  if (defaults !== appliedDefaults) {
+    setAppliedDefaults(defaults);
+    if (defaults && !touched) {
+      setDetector(defaults.detector);
+      setDevice(defaults.device);
+      setConfidence(defaults.confidence_threshold);
+      setStride(defaults.inference_stride);
+    }
+  }
 
   useEffect(() => {
     onChange({ detector, device, confidence_threshold: confidence, inference_stride: stride });
   }, [detector, device, confidence, stride, onChange]);
 
   return (
-    <fieldset className="space-y-4">
+    <fieldset className="space-y-4" onChange={() => setTouched(true)}>
       <legend className="text-sm font-semibold text-slate-100">Analysis settings</legend>
       <label className="block text-xs text-slate-400">
         Detector
