@@ -32,6 +32,10 @@ ml = [
     "torchvision>=0.21",
     "rfdetr>=1.11.2,<2",
 ]
+# Detection evaluation (reference COCO metrics). pycocotools is BSD-2-Clause and needs only numpy.
+eval = [
+    "pycocotools>=2.0.11,<3",
+]
 api = [
     "fastapi>=0.162,<1",
     "pydantic-settings>=2.16,<3",
@@ -89,5 +93,7 @@ mypy_path = ["packages", "apps/api"]
 plugins = ["pydantic.mypy"]
 
 [[tool.mypy.overrides]]
-module = ["rfdetr", "rfdetr.*", "torch", "torch.*", "supervision", "supervision.*"]
+module = [
+    "rfdetr", "rfdetr.*", "torch", "torch.*", "supervision", "supervision.*", "pycocotools.*",
+]
 ignore_missing_imports = true

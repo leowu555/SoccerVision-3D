@@ -94,7 +94,7 @@ data/  models/                Local runtime data and weights (git-ignored)
 # 1. Backend
 python3.13 -m venv .venv
 source .venv/bin/activate
-pip install -e ".[ml,api,dev]"
+pip install -e ".[ml,api,eval,dev]"
 cp .env.example .env                 # optional; defaults work as-is
 
 # Optional: fetch weights ahead of time (otherwise downloaded on first analysis; MD5-verified, and a corrupt file is rejected when downloads are disabled)
@@ -198,6 +198,7 @@ SoccerVision 3D is licensed under the [Apache License 2.0](LICENSE). Notable dep
 | --- | --- | --- |
 | [RF-DETR](https://github.com/roboflow/rf-detr) code and N/S/M COCO weights | Apache-2.0 | Weights are downloaded at runtime and never committed. Trained on COCO. |
 | [supervision](https://github.com/roboflow/supervision) | MIT | Pulled in by RF-DETR |
+| [pycocotools](https://github.com/ppwwyyxx/cocoapi) | BSD-2-Clause | Optional `eval` extra; reference COCO detection metrics |
 | [PyAV](https://github.com/PyAV-Org/PyAV) | BSD-3-Clause | Wheels bundle FFmpeg (reports LGPL-3.0+) linked with **libx264 and libx265 (GPL-2.0+)**. Redistributing binaries or images that contain them carries GPL obligations. |
 | PyTorch / torchvision | BSD-3-Clause | |
 | FastAPI, Pydantic, Next.js, React | MIT | |

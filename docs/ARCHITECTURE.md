@@ -35,6 +35,7 @@ This package has no web dependencies. The API, the CLI and the tests all call th
 | `vision/detection/` | `ObjectDetector` protocol, `RFDETRDetector` (lazy import, weight MD5, warm-up) and the factory |
 | `vision/annotation.py` | Draws boxes and the HUD. Skipped frames are explicitly labelled **NOT ANALYZED**. |
 | `pipeline/runner.py` | Orchestration, post-processing, statistics, failure handling and atomic artifact writes |
+| `evaluation/` | Offline detection evaluation: COCO ground-truth loading and validation, COCO predictions, and metrics via `pycocotools` (optional `eval` extra). Not used by the API or the analysis pipeline. See [MODEL_EVALUATION.md](MODEL_EVALUATION.md). |
 | `cli.py` | `soccervision analyze` / `soccervision devices` |
 
 ### `apps/api/soccervision_api`: the service

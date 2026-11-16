@@ -4,7 +4,96 @@
 
 **No quantitative accuracy evaluation has been performed.** SoccerVision 3D has not measured precision, recall or mAP on any labelled soccer dataset. RF-DETR's published COCO results describe general-domain performance only and are not reproduced here.
 
-What *has* been done is described below: runtime measurements and qualitative inspection on a single short clip.
+An **evaluation module** now exists (`soccervision.evaluation`, Phase 2A.1). It loads COCO-format ground truth and predictions and computes detection metrics, but it has only been run on hand-built synthetic test fixtures. No numbers from those fixtures are model accuracy.
+
+The rest of this file covers the evaluation module, the annotation format, the metric definitions, and how soccer footage can be annotated later. It ends with what *has* been measured so far: runtime and qualitative inspection on a single short clip.
+
+## Evaluation module
+
+### Supported annotation format
+
+Ground truth is a single [COCO detection](https://cocodataset.org/#format-data) JSON file. Only these fields are read; any others are ignored.
+
+| Section | Required fields | Optional fields |
+| --- | --- | --- |
+| `images` | `id` (int), `width`, `height` (positive ints), `file_name` | anything else |
+| `categories` | `id` (int), `name` | `supercategory` |
+| `annotations` | `id`, `image_id`, `category_id` (ints), `bbox` `[x, y, width, height]` in pixels | `iscrowd` (0 or 1, default 0), `area` (> 0, default `width × height`) |
+| `info` | — | `description`, `version`, `url` (used as default provenance) |
+| `licenses` | — | `name` (used as default provenance license) |
+
+The loader rejects the file if any of the following are found, and lists every problem in one `InvalidDatasetError` (`code: invalid_dataset`):
+
+- Missing sections, wrong types, or no images.
+- Duplicate image, category or annotation ids, duplicate file names, or duplicate category names.
+- Annotations that refer to images or categories that don't exist.
+- Boxes with non-positive width or height, negative coordinates, non-finite or non-numeric values, the wrong number of values, or extents beyond the image (a box may touch the edge).
+
+**Category mapping.** Dataset categories are mapped onto evaluation classes. Only `person` is supported. The default map is `{"person": "person"}`. A soccer dataset might use `{"player": "person", "referee": "person", "goalkeeper": "person"}`. Annotations in unmapped categories (for example `ball`) are ignored and counted in `num_ignored_annotations`. A map key that isn't a dataset category is an error.
+
+**Images without objects** are valid and fully evaluated. Any prediction on them is a false positive.
+
+**Provenance.** `DatasetMetadata` records the annotation file name, its SHA-256, the category map, the counts, and a `DatasetProvenance` block: name, version, license, source URL, description, and a `synthetic` flag. Pass a provenance block explicitly, or it's taken from the file's `info` and `licenses`. The `synthetic` flag is copied into every metrics result as `dataset_synthetic`.
+
+**Predictions** use the standard COCO results list, `[{"image_id", "category_id", "bbox": [x, y, w, h], "score"}]`, where `category_id` refers to the dataset's categories. They can also be built in code as `Prediction` objects using this project's `(x_min, y_min, x_max, y_max)` convention. Predictions for unknown images or categories, scores outside [0, 1], and degenerate boxes are rejected (`code: invalid_predictions`).
+
+**Nothing is downloaded.** You provide the annotation file; datasets with gated terms must be fetched by you after accepting them.
+
+### Metric definitions
+
+All metrics are for one class (`person`) and come from a single run of the reference COCO evaluator, `pycocotools` `COCOeval` (bbox mode, BSD-2-Clause; install with `pip install -e ".[eval]"`).
+
+**Matching**, per image: predictions are sorted by score, highest first, and capped at `max_detections_per_image` (default 100). Each is matched to the unmatched ground-truth box with the highest IoU, provided that IoU is at least the threshold. Consequences:
+
+- A second prediction on an already-matched box (a **duplicate**) is a false positive.
+- A prediction that matches only a **crowd** region (`iscrowd: 1`) is ignored: neither a true nor a false positive. Crowd regions are never counted as missed.
+- IoU is standard continuous box IoU. For crowd regions, COCO uses intersection divided by the prediction's area.
+
+| Metric | Definition |
+| --- | --- |
+| `map_50` | Average precision at IoU 0.50: the mean of interpolated precision at 101 recall points (0.00 to 1.00). Uses **all** predictions regardless of the confidence threshold, as COCO does. `null` if the class has no objects. |
+| `map_50_95` | Mean of AP over IoU 0.50, 0.55, …, 0.95 (COCO's headline "AP"). |
+| `precision` | TP / (TP + FP) among predictions with score ≥ `confidence_threshold` (default 0.5), at `iou_threshold` (default 0.50; any of the ten COCO thresholds). `null` if no prediction passes the threshold. |
+| `recall` | TP / number of non-crowd objects at the same threshold and IoU. `null` if there are no objects. |
+| `true_positives`, `false_positives`, `false_negatives` | The counts behind precision and recall. |
+| `recall_by_size` | Recall at the same threshold and IoU for COCO area buckets: **small** ≤ 32² px, **medium** 32²–96² px, **large** > 96² px, bucketed by the ground truth's `area`. |
+
+Because matching takes the highest scores first, applying the confidence threshold after matching gives the same result as matching only the predictions above it. The counts and mAP therefore share one matching. A test checks that `map_50` and `map_50_95` equal `COCOeval.summarize()` on the same data.
+
+### How the module works
+
+```python
+from pathlib import Path
+from soccervision.evaluation import DatasetProvenance, evaluate_detections, load_coco_dataset, load_coco_predictions
+
+dataset = load_coco_dataset(
+    Path("annotations/test.json"),
+    category_map={"player": "person", "referee": "person", "goalkeeper": "person"},
+    provenance=DatasetProvenance(name="my-soccer-set", version="2026-11", license="CC-BY-4.0"),
+)
+predictions = load_coco_predictions(Path("predictions/rfdetr-nano.json"), dataset)
+metrics = evaluate_detections(dataset, predictions, confidence_threshold=0.5, iou_threshold=0.5)
+print(metrics.model_dump_json(indent=2))
+```
+
+| File | Role |
+| --- | --- |
+| `packages/soccervision/evaluation/dataset.py` | Ground-truth loading, validation, category mapping and provenance |
+| `packages/soccervision/evaluation/predictions.py` | COCO results loading and validation |
+| `packages/soccervision/evaluation/metrics.py` | `evaluate_detections`: builds in-memory COCO indexes, runs `COCOeval`, and derives the thresholded counts from its per-image match records |
+| `tests/unit/test_evaluation_*.py`, `tests/fixtures/evaluation/` | Synthetic fixtures and tests. The fixture file and builders are labelled `SYNTHETIC`, and their provenance sets `synthetic: true`. |
+
+There's no CLI, no model benchmarking and no frontend for this yet. Running RF-DETR over a dataset to produce predictions is the next step.
+
+### Annotating real soccer footage later
+
+1. **Use footage you're allowed to use.** That means your own recordings, or clips under a license that permits annotation and publishing derived metrics, such as CC BY. Don't use broadcast footage without permission. Record the license in `DatasetProvenance`.
+2. **Extract frames, not every frame.** Sample frames at a fixed interval (for example 1 per second) so neighbouring frames aren't near-duplicates. Keep the source video ID and frame index in `file_name`, for example `match_a/frame_000030.jpg`.
+3. **Split by match, not by frame.** All frames from one match go into the same split (test or train), otherwise results are inflated.
+4. **Label with a tool that exports COCO.** [CVAT](https://github.com/cvat-ai/cvat) (MIT) and [Label Studio](https://github.com/HumanSignal/label-studio) (Apache-2.0) both can be self-hosted. Draw tight boxes around every visible person, including partially occluded ones. Use separate categories (`player`, `goalkeeper`, `referee`, `other_person`) and map them to `person` at evaluation time; the roles will be useful later.
+5. **Use `iscrowd: 1` for dense crowds**, such as stands, rather than leaving spectators unlabelled. Otherwise correct detections of spectators count as false positives.
+6. **Write labelling guidelines down** (minimum box size, how to handle occlusion and truncation at the frame edge), and double-annotate a small subset to measure agreement.
+7. **Keep the data out of Git.** Store frames and annotation files outside the repository, and record the annotation file's SHA-256 (done automatically) and version with every reported result.
 
 ## Model
 
@@ -41,9 +130,9 @@ A CLI run on the original Ogg/Theora file, before H.264 conversion, reported 3,5
 
 None of these numbers are accuracy metrics. "Total detections" counts boxes, not correct boxes, and not unique people.
 
-## Planned evaluation protocol (Phase 6)
+## Planned evaluation protocol
 
 1. **Data:** a soccer dataset with person and ball boxes under a license that permits this use. Gated datasets are not downloaded automatically; users fetch them themselves after accepting the terms. Train and test splits are separated by match, not by frame.
-2. **Metrics:** COCO mAP@[.5:.95] and AP50 for `person`; recall split by box area (small objects matter most); and false positives per frame on crowd regions.
+2. **Metrics:** COCO mAP@[.5:.95] and AP50 for `person`, recall split by box area (small objects matter most), and precision and recall at the deployed threshold. These are implemented in the evaluation module above. Ball evaluation and false positives per frame on crowd regions are not implemented yet.
 3. **Sweep:** model variant × input resolution × confidence threshold, reported alongside latency on CPU, MPS and CUDA.
 4. **Reporting:** results tables in this file, with the exact model ID, weights MD5, package versions and dataset version, so every number is reproducible.

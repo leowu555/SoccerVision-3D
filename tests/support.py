@@ -3,12 +3,19 @@
 from collections.abc import Sequence
 from fractions import Fraction
 from pathlib import Path
+from typing import Any
 
 import av
 import numpy as np
 import numpy.typing as npt
 
 from soccervision.config import DetectorConfig
+from soccervision.evaluation import (
+    DatasetProvenance,
+    EvaluationDataset,
+    Prediction,
+    parse_coco_dataset,
+)
 from soccervision.schemas.detection import ModelInfo
 from soccervision.vision.detection import RawDetection
 
@@ -90,3 +97,60 @@ class FakeDetectorFactory:
         detector = FakeDetector(config, **self.kwargs)
         self.instances.append(detector)
         return detector
+
+
+SYNTHETIC_PROVENANCE = DatasetProvenance(
+    name="synthetic-test-fixture",
+    description="Hand-built boxes for unit tests. Not footage, not model accuracy.",
+    synthetic=True,
+)
+
+
+def synthetic_coco(
+    boxes: dict[int, Sequence[Sequence[float]]],
+    *,
+    size: tuple[int, int] = (640, 480),
+    crowd: dict[int, Sequence[Sequence[float]]] | None = None,
+) -> dict[str, Any]:
+    """A COCO document with one 'person' category: {image_id: [[x, y, w, h], ...]}."""
+    width, height = size
+    annotations: list[dict[str, Any]] = []
+    for is_crowd, source in ((0, boxes), (1, crowd or {})):
+        for image_id, image_boxes in source.items():
+            for bbox in image_boxes:
+                annotations.append(
+                    {
+                        "id": len(annotations) + 1,
+                        "image_id": image_id,
+                        "category_id": 1,
+                        "bbox": list(bbox),
+                        "iscrowd": is_crowd,
+                    }
+                )
+    return {
+        "info": {"description": "SYNTHETIC test fixture"},
+        "images": [
+            {"id": image_id, "width": width, "height": height, "file_name": f"frame_{image_id}.jpg"}
+            for image_id in sorted(boxes)
+        ],
+        "categories": [{"id": 1, "name": "person"}],
+        "annotations": annotations,
+    }
+
+
+def synthetic_dataset(
+    boxes: dict[int, Sequence[Sequence[float]]], **kwargs: Any
+) -> EvaluationDataset:
+    return parse_coco_dataset(
+        synthetic_coco(boxes, **kwargs),
+        annotation_file="synthetic.json",
+        annotation_sha256="0" * 64,
+        provenance=SYNTHETIC_PROVENANCE,
+    )
+
+
+def prediction(image_id: int, bbox_xywh: Sequence[float], score: float) -> Prediction:
+    x, y, w, h = bbox_xywh
+    return Prediction(
+        image_id=image_id, class_name="person", bbox_xyxy=(x, y, x + w, y + h), score=score
+    )

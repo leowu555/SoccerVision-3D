@@ -1,0 +1,26 @@
+{
+  "info": {
+    "description": "SYNTHETIC soccer-style COCO fixture (hand-written boxes, no real footage)",
+    "version": "1.0",
+    "url": "https://example.invalid/synthetic"
+  },
+  "licenses": [{ "id": 1, "name": "CC0-1.0" }],
+  "images": [
+    { "id": 10, "width": 1280, "height": 720, "file_name": "match_a/frame_000000.jpg", "license": 1 },
+    { "id": 11, "width": 1280, "height": 720, "file_name": "match_a/frame_000030.jpg", "license": 1 },
+    { "id": 12, "width": 1280, "height": 720, "file_name": "match_a/frame_000060.jpg", "license": 1 }
+  ],
+  "categories": [
+    { "id": 1, "name": "player" },
+    { "id": 2, "name": "referee" },
+    { "id": 3, "name": "ball" }
+  ],
+  "annotations": [
+    { "id": 100, "image_id": 10, "category_id": 1, "bbox": [100, 200, 40, 90], "iscrowd": 0 },
+    { "id": 101, "image_id": 10, "category_id": 1, "bbox": [600.5, 300.25, 12, 30], "iscrowd": 0, "area": 300 },
+    { "id": 102, "image_id": 10, "category_id": 2, "bbox": [900, 250, 35, 85], "iscrowd": 0 },
+    { "id": 103, "image_id": 10, "category_id": 3, "bbox": [640, 400, 8, 8], "iscrowd": 0 },
+    { "id": 104, "image_id": 11, "category_id": 1, "bbox": [0, 0, 1280, 300], "iscrowd": 1 },
+    { "id": 105, "image_id": 11, "category_id": 3, "bbox": [10, 10, 6, 6], "iscrowd": 0 }
+  ]
+}

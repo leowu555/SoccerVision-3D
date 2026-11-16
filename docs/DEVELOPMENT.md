@@ -14,7 +14,7 @@ Dependency ranges are pinned in `pyproject.toml` (Python) and `apps/web/package-
 
 ```bash
 python3.13 -m venv .venv && source .venv/bin/activate
-pip install -e ".[ml,api,dev]"     # drop `ml` to work on API/frontend without PyTorch
+pip install -e ".[ml,api,eval,dev]"  # drop `ml` to work on API/frontend without PyTorch
 cd apps/web && npm ci
 ```
 

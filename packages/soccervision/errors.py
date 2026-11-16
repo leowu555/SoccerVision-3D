@@ -49,3 +49,35 @@ class VideoEncodingError(SoccerVisionError):
     """The annotated output video could not be written."""
 
     code = "video_encoding_failed"
+
+
+_MAX_REPORTED_ISSUES = 20
+
+
+class _IssueListError(SoccerVisionError):
+    """An error that reports every validation issue found, not just the first."""
+
+    def __init__(self, summary: str, issues: list[str]) -> None:
+        shown = "\n".join(f"  - {issue}" for issue in issues[:_MAX_REPORTED_ISSUES])
+        hidden = len(issues) - _MAX_REPORTED_ISSUES
+        more = f"\n  ... and {hidden} more" if hidden > 0 else ""
+        super().__init__(f"{summary} ({len(issues)} issue(s)):\n{shown}{more}")
+        self.issues = issues
+
+
+class InvalidDatasetError(_IssueListError):
+    """An evaluation annotation file is malformed or internally inconsistent."""
+
+    code = "invalid_dataset"
+
+
+class InvalidPredictionsError(_IssueListError):
+    """A predictions file does not match its evaluation dataset."""
+
+    code = "invalid_predictions"
+
+
+class EvaluationUnavailableError(SoccerVisionError):
+    """The evaluation dependencies are not installed."""
+
+    code = "evaluation_unavailable"
