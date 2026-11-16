@@ -64,7 +64,12 @@ Because matching takes the highest scores first, applying the confidence thresho
 
 ```python
 from pathlib import Path
-from soccervision.evaluation import DatasetProvenance, evaluate_detections, load_coco_dataset, load_coco_predictions
+from soccervision.evaluation import (
+    DatasetProvenance,
+    evaluate_detections,
+    load_coco_dataset,
+    load_coco_predictions,
+)
 
 dataset = load_coco_dataset(
     Path("annotations/test.json"),
