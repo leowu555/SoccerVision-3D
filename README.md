@@ -1,10 +1,13 @@
 # SoccerVision 3D
 
-This is an open-source computer-vision pipeline for soccer videos, built in phases toward multi-object tracking, team classification, pitch calibration, and 3D scene reconstruction.
+This is an open-source computer-vision pipeline for soccer videos. It is being built in small, tested milestones toward multi-object tracking, team classification, pitch calibration, ball tracking, event recognition, and an interactive 3D replay.
 
-**Current status: Phase 1 — person detection.** You upload an MP4. A pretrained [RF-DETR](https://github.com/roboflow/rf-detr) model detects the COCO `person` class on every analyzed frame, and you get an annotated, browser-playable video plus versioned JSON artifacts.
+**Current status:**
 
-> Phase 1 detects *generic people*. It does not identify players, tell players from referees or spectators, assign teams, track identities across frames, or estimate pitch positions. Those are [roadmap](docs/ROADMAP.md) items and are **not implemented**.
+- **Phase 1 (detection platform): complete.** You upload an MP4. A pretrained [RF-DETR](https://github.com/roboflow/rf-detr) model detects the COCO `person` class on every analyzed frame, and you get an annotated, browser-playable video plus versioned JSON artifacts.
+- **Phase 2A (detection evaluation): in progress.** Milestone 2A.1, an offline COCO evaluation module (dataset validation and detection metrics), is complete. The next milestone, **2A.2**, exports RF-DETR predictions over a COCO dataset so that they can be scored.
+
+> Phase 1 detects *generic people*. It does not identify players, tell players from referees or spectators, assign teams, track identities across frames, or estimate pitch positions. Those are [roadmap](docs/ROADMAP.md) items and are **not implemented**. No detection accuracy has been measured on real soccer footage yet.
 
 <p align="center">
   <img src="docs/media/annotated-demo.gif" alt="Annotated output: RF-DETR Nano person detections on a corner kick, with the per-frame status overlay" width="490">
@@ -54,6 +57,7 @@ The dashboard lists one `failed` video on purpose. That job was interrupted by a
 | Artifacts | `annotated.mp4` (H.264, `yuv420p`, faststart), `detections.json`, and `metadata.json` with a versioned schema ([data contracts](docs/DATA_CONTRACTS.md)) |
 | Frontend | Next.js dashboard, drag-and-drop upload, and an analysis page with synced original and annotated players, a per-frame detection timeline, run metadata, and job status |
 | CLI | `python -m soccervision.cli analyze`, using the same pipeline as the API |
+| Evaluation (offline library) | `soccervision.evaluation`: COCO ground-truth loading and validation, category mapping, dataset provenance and SHA-256, COCO prediction loading, and `person` detection metrics (mAP@0.50, mAP@0.50:0.95, precision, recall, recall by object size) via `pycocotools`. Python API only, with no CLI yet, and so far run only on synthetic test fixtures ([details](docs/MODEL_EVALUATION.md)). |
 
 Frames that are skipped by `inference_stride` are recorded as `"inference_status": "skipped"` with `detections: null` and are labelled **NOT ANALYZED** in the output video. They are never reported as zero detections.
 
@@ -73,12 +77,23 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the design and its trade-of
 ```text
 apps/api/soccervision_api/    FastAPI app, job runner, worker entrypoint, SQLite persistence
 apps/web/                     Next.js 16 frontend (TypeScript, Tailwind CSS 4)
-packages/soccervision/        Core library: schemas, video I/O, detectors, annotation, pipeline, CLI
+packages/soccervision/        Core library: schemas, video I/O, detectors, annotation, pipeline, evaluation, CLI
 scripts/                      Weight download and MP4 conversion helpers
 tests/                        Unit, API, and opt-in integration tests
 docs/                         Architecture, roadmap, development, data contracts, model evaluation
 data/  models/                Local runtime data and weights (git-ignored)
 ```
+
+## Documentation
+
+| Document | Contents |
+| --- | --- |
+| [ARCHITECTURE.md](docs/ARCHITECTURE.md) | Components, key design decisions and trade-offs, data flow |
+| [ROADMAP.md](docs/ROADMAP.md) | The 11-phase plan, broken into small milestones with dependencies and metrics |
+| [DEVELOPMENT.md](docs/DEVELOPMENT.md) | Environment setup, checks, test layout, conventions, troubleshooting |
+| [DATA_CONTRACTS.md](docs/DATA_CONTRACTS.md) | Artifact and API schemas, plus planned schemas |
+| [MODEL_EVALUATION.md](docs/MODEL_EVALUATION.md) | The evaluation module, metric definitions, and what has and hasn't been measured |
+| [PHASE1_HANDOFF.md](docs/PHASE1_HANDOFF.md) | Historical snapshot of the Phase 1 implementation report |
 
 ## Requirements
 
@@ -158,7 +173,7 @@ All backend settings are `SOCCERVISION_*` environment variables, and `.env` is a
 ## Tests and checks
 
 ```bash
-pytest                                   # unit + API tests (fake detectors; no GPU, no downloads)
+pytest                                   # unit, API and evaluation tests (fake detectors; no GPU, no downloads)
 ruff check . && ruff format --check .
 mypy                                     # strict
 
@@ -170,7 +185,7 @@ SOCCERVISION_WEIGHTS_DIR=models pytest tests/integration
 cd apps/web && npm run lint && npm run typecheck && npm test && npm run build
 ```
 
-The fake detectors used in tests are marked `is_synthetic: true` in every artifact they produce, and the pipeline adds a warning. They are never used by the API or CLI.
+The fake detectors used in tests are marked `is_synthetic: true` in every artifact they produce, and the pipeline adds a warning. They are never used by the API or CLI. See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) for the test layout, CI and troubleshooting.
 
 ## Docker (API, CPU)
 
@@ -185,10 +200,29 @@ The Dockerfile has not been built in the development environment (Docker was not
 
 - **COCO `person` is not "player".** Referees, coaches, ball kids, and visible spectators are all detected. There is no tracking, so each frame's boxes are independent and `total_detections` counts boxes summed over frames, not unique people.
 - **Small, distant players are missed.** This is most noticeable with Nano at its native 384 px input, for example players near the far goal in wide shots. Small or Medium, or a larger `inference_resolution` (a multiple of 32), helps at a speed cost.
-- Accuracy has not been measured on a labelled soccer dataset. See [docs/MODEL_EVALUATION.md](docs/MODEL_EVALUATION.md).
+- Accuracy has not been measured on a labelled soccer dataset. The evaluation module exists, but there is no prediction exporter, evaluation CLI or real soccer evaluation set yet, and it evaluates only the `person` class. See [docs/MODEL_EVALUATION.md](docs/MODEL_EVALUATION.md).
 - Uploads must be MP4. The CLI accepts any container FFmpeg can read. Audio is not carried into the annotated video.
 - Single host only. SQLite and local disk, no authentication, and not designed for public internet exposure.
 - There is no retention policy. Uploads and artifacts stay until you delete the video (the **Delete** button on the analysis page, or `DELETE /api/v1/videos/{id}`).
+- Each job loads the model in a fresh worker subprocess, which adds about 6 s per job.
+
+## Roadmap
+
+The full plan is in [docs/ROADMAP.md](docs/ROADMAP.md). In short, every phase after 2A.1 is **planned, not implemented**:
+
+| Phase | Goal |
+| --- | --- |
+| 2A | Detection evaluation: prediction export (**2A.2, next**), evaluation CLI, a real soccer evaluation set, model comparison |
+| 2B | Multi-object tracking (Kalman filtering, ByteTrack), with camera-motion compensation |
+| 3 | Team classification, pitch calibration (RANSAC homography), 2D tactical replay |
+| 4 | Soccer-specific detection: fine-tuning and teacher-student distillation |
+| 5 | Ball tracking: trajectory linking and physics-aware motion estimation |
+| 6 | Events: possession state machine, Viterbi decoding, pass and shot recognition |
+| 7 | Interactive 3D replay (Three.js), heatmaps, passing networks |
+| 8 | Synthetic soccer simulator with ground-truth trajectories and events |
+| 9 | Benchmarking, ablation studies and inference optimization |
+| 10 | Production infrastructure (queues, PostgreSQL, object storage, GPU workers, observability) |
+| 11 | Optional: grounded natural-language queries, real-time processing, advanced 3D pose |
 
 ## Licensing
 

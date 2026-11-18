@@ -1,5 +1,7 @@
 # SoccerVision 3D: Phase 1 handoff for review
 
+> **Historical document.** This is the original Phase 1 implementation handoff, kept unchanged as a record. Its statements about Git status, repository naming, CI, test counts and implementation status were accurate only when it was written. Since then, the work has been committed, the repository has been renamed to [SoccerVision-3D](https://github.com/leowu555/SoccerVision-3D), CI runs on GitHub Actions, and the roadmap has been renumbered into 11 phases (the original "Phases 2–7" are mapped in [ROADMAP.md](ROADMAP.md#phase-numbering-change)). For current information, see the [README](../README.md) and [ROADMAP.md](ROADMAP.md).
+
 This document is for a reviewer (human or AI) checking the Phase 1 implementation and planning the next steps. It summarizes what was built against the original "SoccerVision 3D master prompt", how it was verified, where it deviates from the prompt, and the open questions.
 
 **State of the repository:** all work is uncommitted in the working tree. Nothing has been committed, pushed or deployed. The local Git repo and its remote are still named `real-time-facial-recognition-app` (`github.com/leowu555/real-time-facial-recognition-app`), left over from an earlier, unrelated project. Its old C++ README was replaced.

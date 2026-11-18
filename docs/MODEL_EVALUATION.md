@@ -2,7 +2,7 @@
 
 ## Status
 
-**No quantitative accuracy evaluation has been performed.** SoccerVision 3D has not measured precision, recall or mAP on any labelled soccer dataset. RF-DETR's published COCO results describe general-domain performance only and are not reproduced here.
+**No quantitative accuracy evaluation has been performed, and no real-world soccer detection benchmark exists yet.** SoccerVision 3D has not measured precision, recall or mAP on any labelled soccer dataset. RF-DETR's published COCO results describe general-domain performance only and are not reproduced here.
 
 An **evaluation module** now exists (`soccervision.evaluation`, Phase 2A.1). It loads COCO-format ground truth and predictions and computes detection metrics, but it has only been run on hand-built synthetic test fixtures. No numbers from those fixtures are model accuracy.
 
@@ -35,7 +35,12 @@ The loader rejects the file if any of the following are found, and lists every p
 
 **Provenance.** `DatasetMetadata` records the annotation file name, its SHA-256, the category map, the counts, and a `DatasetProvenance` block: name, version, license, source URL, description, and a `synthetic` flag. Pass a provenance block explicitly, or it's taken from the file's `info` and `licenses`. The `synthetic` flag is copied into every metrics result as `dataset_synthetic`.
 
-**Predictions** use the standard COCO results list, `[{"image_id", "category_id", "bbox": [x, y, w, h], "score"}]`, where `category_id` refers to the dataset's categories. They can also be built in code as `Prediction` objects using this project's `(x_min, y_min, x_max, y_max)` convention. Predictions for unknown images or categories, scores outside [0, 1], and degenerate boxes are rejected (`code: invalid_predictions`).
+**Predictions** use the standard COCO results list, `[{"image_id", "category_id", "bbox": [x, y, w, h], "score"}]`, where `category_id` refers to the dataset's categories. They can also be built in code as `Prediction` objects using this project's `(x_min, y_min, x_max, y_max)` convention.
+
+- **Rejected when loading a results file** (`code: invalid_predictions`, every issue listed): unknown image or category IDs, scores outside [0, 1], non-finite values, and boxes with negative coordinates or non-positive width or height.
+- **Dropped:** predictions in valid dataset categories that the category map doesn't include, mirroring how unmapped ground truth is ignored.
+- Boxes that extend past the image edge are accepted, as COCO allows.
+- `Prediction` objects built in code validate their own boxes on construction, and `evaluate_detections` rejects any whose image ID is not in the dataset.
 
 **Nothing is downloaded.** You provide the annotation file; datasets with gated terms must be fetched by you after accepting them.
 
@@ -56,9 +61,13 @@ All metrics are for one class (`person`) and come from a single run of the refer
 | `precision` | TP / (TP + FP) among predictions with score ≥ `confidence_threshold` (default 0.5), at `iou_threshold` (default 0.50; any of the ten COCO thresholds). `null` if no prediction passes the threshold. |
 | `recall` | TP / number of non-crowd objects at the same threshold and IoU. `null` if there are no objects. |
 | `true_positives`, `false_positives`, `false_negatives` | The counts behind precision and recall. |
-| `recall_by_size` | Recall at the same threshold and IoU for COCO area buckets: **small** ≤ 32² px, **medium** 32²–96² px, **large** > 96² px, bucketed by the ground truth's `area`. |
+| `recall_by_size` | Recall at the same threshold and IoU for COCO area buckets: **small** ≤ 32² px, **medium** 32²–96² px, **large** > 96² px, bucketed by the ground truth's `area`. As in COCO, the bounds are inclusive, so an area of exactly 32² or 96² falls in both adjacent buckets. |
 
 Because matching takes the highest scores first, applying the confidence threshold after matching gives the same result as matching only the predictions above it. The counts and mAP therefore share one matching. A test checks that `map_50` and `map_50_95` equal `COCOeval.summarize()` on the same data.
+
+Because mAP uses every prediction, predictions should be exported at a low score threshold. Exporting only detections above the deployed 0.5 threshold would truncate the precision-recall curve and understate mAP.
+
+`evaluate_detections` raises `ValueError` for a class that isn't one of the dataset's evaluation classes, a confidence threshold outside [0, 1], an IoU threshold that isn't one of the ten COCO values, or `max_detections_per_image` below 1. It raises `EvaluationUnavailableError` (`evaluation_unavailable`) if `pycocotools` isn't installed. The result also records the `pycocotools` version used.
 
 ### How the module works
 
@@ -88,7 +97,15 @@ print(metrics.model_dump_json(indent=2))
 | `packages/soccervision/evaluation/metrics.py` | `evaluate_detections`: builds in-memory COCO indexes, runs `COCOeval`, and derives the thresholded counts from its per-image match records |
 | `tests/unit/test_evaluation_*.py`, `tests/fixtures/evaluation/` | Synthetic fixtures and tests. The fixture file and builders are labelled `SYNTHETIC`, and their provenance sets `synthetic: true`. |
 
-There's no CLI, no model benchmarking and no frontend for this yet. Running RF-DETR over a dataset to produce predictions is the next step.
+**Not implemented yet** (see [ROADMAP.md](ROADMAP.md#phase-2a-detection-evaluation-and-optimization-in-progress)):
+
+- An RF-DETR prediction exporter that runs the detector over a dataset's images and writes COCO results (milestone 2A.2, next).
+- An evaluation CLI (2A.3).
+- A real soccer evaluation set (2A.4).
+- Model comparison and error analysis (2A.5, 2A.6).
+- Any frontend for evaluation.
+
+Until 2A.2 exists, predictions must come from some other source.
 
 ### Annotating real soccer footage later
 
@@ -136,6 +153,8 @@ A CLI run on the original Ogg/Theora file, before H.264 conversion, reported 3,5
 None of these numbers are accuracy metrics. "Total detections" counts boxes, not correct boxes, and not unique people.
 
 ## Planned evaluation protocol
+
+This protocol corresponds to roadmap milestones 2A.4–2A.6. None of it has been run yet.
 
 1. **Data:** a soccer dataset with person and ball boxes under a license that permits this use. Gated datasets are not downloaded automatically; users fetch them themselves after accepting the terms. Train and test splits are separated by match, not by frame.
 2. **Metrics:** COCO mAP@[.5:.95] and AP50 for `person`, recall split by box area (small objects matter most), and precision and recall at the deployed threshold. These are implemented in the evaluation module above. Ball evaluation and false positives per frame on crowd regions are not implemented yet.

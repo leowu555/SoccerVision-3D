@@ -1,6 +1,6 @@
 # Architecture
 
-This document describes the Phase 1 system as implemented. Later phases are described in [ROADMAP.md](ROADMAP.md) only.
+This document describes the system as implemented: the Phase 1 detection platform, plus the offline evaluation module from milestone 2A.1. Planned work (tracking, pitch geometry, 3D replay, distributed infrastructure) is described in [ROADMAP.md](ROADMAP.md) only.
 
 ## Components
 
@@ -32,7 +32,8 @@ This package has no web dependencies. The API, the CLI and the tests all call th
 | `devices.py` | Device discovery and resolution. `auto` picks CUDA, then MPS, then CPU. An explicitly requested device that is unavailable is an error, never a silent fallback. |
 | `schemas/` | Versioned data contracts for videos, detections, jobs and artifacts ([DATA_CONTRACTS.md](DATA_CONTRACTS.md)) |
 | `vision/video/` | `probe_video` (container and stream validation, metadata), `VideoDecoder` (RGB frames with PTS-derived timestamps), `AnnotatedVideoWriter` (H.264/yuv420p/faststart, falling back to MPEG-4 Part 2 if libx264 is missing) |
-| `vision/detection/` | `ObjectDetector` protocol, `RFDETRDetector` (lazy import, weight MD5, warm-up) and the factory |
+| `errors.py` | `SoccerVisionError` hierarchy, each with a stable `code` (for example `invalid_video`, `model_unavailable`, `invalid_dataset`) |
+| `vision/detection/` | `ObjectDetector` protocol, `RFDETRDetector` (lazy import, pinned weight MD5, warm-up, input resolution divisible by 32) and the factory |
 | `vision/annotation.py` | Draws boxes and the HUD. Skipped frames are explicitly labelled **NOT ANALYZED**. |
 | `pipeline/runner.py` | Orchestration, post-processing, statistics, failure handling and atomic artifact writes |
 | `evaluation/` | Offline detection evaluation: COCO ground-truth loading and validation, COCO predictions, and metrics via `pycocotools` (optional `eval` extra). Not used by the API or the analysis pipeline. See [MODEL_EVALUATION.md](MODEL_EVALUATION.md). |
@@ -93,6 +94,16 @@ OpenCV is deliberately absent. On macOS its bundled FFmpeg conflicts with PyAV's
 
 Output frames keep the input's relative PTS, so the annotated video stays in sync with the original even for variable-frame-rate sources. Odd frame dimensions are padded to even values, as `yuv420p` requires, and this is recorded in the metadata.
 
+### Offline evaluation, separate from the product pipeline
+
+`soccervision.evaluation` is a library used offline; the API, workers and analysis pipeline never import it.
+
+- **Reference implementation for metrics.** mAP, precision and recall all come from one `pycocotools` `COCOeval` run rather than a hand-written matcher, so the numbers are comparable with published COCO results. `pycocotools` is an optional `eval` extra, and a missing install raises `evaluation_unavailable`.
+- **Strict, complete validation.** Malformed annotation or prediction files raise `invalid_dataset` or `invalid_predictions`, listing every issue found instead of only the first.
+- **Traceability.** Every dataset carries its annotation file's SHA-256 and a provenance block, and its `synthetic` flag is copied into every metrics result.
+
+Details are in [MODEL_EVALUATION.md](MODEL_EVALUATION.md).
+
 ### Upload validation
 
 1. The extension must be `.mp4` (otherwise 415).
@@ -110,7 +121,7 @@ Artifacts are served only by whitelisted name, and only if the job's recorded `a
 ## Data flow for one analysis
 
 1. Probe the input and check limits, then compute the SHA-256 of the input.
-2. Load the model with the factory, timing it, and run a warm-up prediction. With downloads disabled, the checkpoint's MD5 is checked against the pinned value before rfdetr loads it, because rfdetr would otherwise re-download a mismatched file.
+2. Load the model with the factory, timing it, and run a warm-up prediction. With downloads disabled, the checkpoint's MD5 is checked against the pinned value before rfdetr loads it, because rfdetr would otherwise re-download a mismatched file. In every case, the loaded file is re-verified after loading.
 3. For each decoded frame:
    - Stop with `video_limit_exceeded` if decoded timestamps pass the duration limit, in case the container's duration is wrong.
    - If `index % stride == 0`, run the detector, filter to the target classes at or above the threshold, drop non-finite boxes, clip to the frame (counted), and discard degenerate boxes (counted).
@@ -118,6 +129,6 @@ Artifacts are served only by whitelisted name, and only if the job's recorded `a
 4. Write `detections.json`, rename the video to `annotated.mp4`, then write `metadata.json` last as the commit marker.
 5. On any exception, delete the partial outputs and write `metadata.json` with `status: "failed"` and the error.
 
-## Not in scope for Phase 1
+## Not implemented
 
-There is no authentication or multi-tenancy, no horizontal scaling, no object storage, and no GPU scheduling across hosts. The single-host SQLite design is intentional for a local, open-source tool. See the roadmap for when this would change.
+There is no authentication or multi-tenancy, no horizontal scaling, no object storage, and no GPU scheduling across hosts. The single-host SQLite design is intentional for a local, open-source tool. Tracking, pitch geometry, ball and event inference, 3D replay, and Redis, PostgreSQL or S3 are all roadmap items ([Phase 10](ROADMAP.md#phase-10-production-ml-infrastructure-planned) covers infrastructure).

@@ -4,6 +4,8 @@ The source of truth is the Pydantic models in [`packages/soccervision/schemas/`]
 
 Section 1 describes what Phase 1 **writes today**. Section 2 describes **planned** schemas, which are not implemented, so their field names may still change.
 
+The offline evaluation module (milestone 2A.1) writes no artifacts. Its in-memory models (`EvaluationDataset`, `DatasetMetadata`, `Prediction`, `DetectionMetrics`) live in `packages/soccervision/evaluation/` and are documented in [MODEL_EVALUATION.md](MODEL_EVALUATION.md).
+
 ## Versioning
 
 - Every JSON artifact carries `schema_version` (currently **`1.0.0`**, `ARTIFACT_SCHEMA_VERSION`) and `artifact_type`.
@@ -146,13 +148,13 @@ These sketches exist so that Phase 1 choices, such as `ObservationSource`, the s
 
 | Schema | Key fields | [Roadmap](ROADMAP.md) phase |
 | --- | --- | --- |
-| `TrackObservation` | `video_id`, `frame_index`, `timestamp_seconds`, `track_id`, `bbox_xyxy`, `confidence`, `source` (`model_detection` when observed, `tracker_prediction` when predicted), `tracking_method`, `detection_id?` | 2 |
+| `TrackObservation` | `video_id`, `frame_index`, `timestamp_seconds`, `track_id`, `bbox_xyxy`, `confidence`, `source` (`model_detection` when observed, `tracker_prediction` when predicted), `tracking_method`, `detection_id?` | 2B |
 | `TeamClassification` | `track_id`, `team` (`team_a`, `team_b`, `referee`, `goalkeeper` or `unknown`), `confidence`, `method` | 3 |
 | `PitchCalibration` | `video_id`, `frame_index` (or a range), `homography` (3×3, image to pitch plane), `pitch_length_m`, `pitch_width_m`, `reprojection_error_px`, `confidence`, `valid` | 3 |
 | `WorldPosition` | `track_id`, `frame_index`, `x_m`, `y_m`, `z_m?`, `source` (`geometric_projection` or `interpolation`), `calibration_id`, `uncertainty_m?` (ground-contact point, not box centre) | 3 |
-| `BallObservation` | `frame_index`, `bbox_xyxy?`, `image_xy?`, `world_xyz?` (only with sufficient constraints), `confidence`, `visible`, `source` | 4 |
-| `SoccerEvent` | `event_id`, `type` (`pass`, `shot` and so on), `start_frame`, `end_frame`, `actors` (track IDs), `confidence`, `status` (`confirmed` or `inferred`) | 4 |
-| `PoseObservation` | `track_id`, `frame_index`, `keypoints` (name, x, y, confidence), `skeleton` (format ID); experimental | 5 |
-| `SceneFrame` | `frame_index`, `timestamp_seconds`, `players[]` (WorldPosition and team), `ball?`, `calibration_id` | 5 |
+| `BallObservation` | `frame_index`, `bbox_xyxy?`, `image_xy?`, `world_xyz?` (only with sufficient constraints), `confidence`, `visible`, `source` | 5 |
+| `SoccerEvent` | `event_id`, `type` (`pass`, `shot` and so on), `start_frame`, `end_frame`, `actors` (track IDs), `confidence`, `status` (`confirmed` or `inferred`) | 6 |
+| `PoseObservation` | `track_id`, `frame_index`, `keypoints` (name, x, y, confidence), `skeleton` (format ID); experimental | 7 (research milestones 7.14–7.15) |
+| `SceneFrame` | `frame_index`, `timestamp_seconds`, `players[]` (WorldPosition and team), `ball?`, `calibration_id` | 7 |
 
 Derived values (anything not directly output by a model on that frame) must carry a non-`model_detection` `source` so that consumers can always tell measurement from inference.

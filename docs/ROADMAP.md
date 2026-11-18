@@ -36,7 +36,7 @@ SoccerVision 3D is built in small, independently testable milestones. **Implemen
 
 ### Phase numbering change
 
-Earlier documents, such as [PHASE1_HANDOFF.md](PHASE1_HANDOFF.md) and the planned-schema table in [DATA_CONTRACTS.md](DATA_CONTRACTS.md#2-planned-not-implemented), use the original seven-phase numbering. It maps onto the current phases as follows:
+The historical [PHASE1_HANDOFF.md](PHASE1_HANDOFF.md) uses the original seven-phase numbering. It maps onto the current phases as follows:
 
 | Original phase | Current phase |
 | --- | --- |
