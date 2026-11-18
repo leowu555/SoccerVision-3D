@@ -4,7 +4,7 @@ The source of truth is the Pydantic models in [`packages/soccervision/schemas/`]
 
 Section 1 describes what Phase 1 **writes today**. Section 2 describes **planned** schemas, which are not implemented, so their field names may still change.
 
-The offline evaluation module (milestone 2A.1) writes no artifacts. Its in-memory models (`EvaluationDataset`, `DatasetMetadata`, `Prediction`, `DetectionMetrics`) live in `packages/soccervision/evaluation/` and are documented in [MODEL_EVALUATION.md](MODEL_EVALUATION.md).
+The offline evaluation module is not part of the run artifacts. Its models (`EvaluationDataset`, `DatasetMetadata`, `Prediction`, `DetectionMetrics`, and for prediction export `CocoPrediction` and `PredictionExportMetadata`) live in `packages/soccervision/evaluation/`. They are documented in [MODEL_EVALUATION.md](MODEL_EVALUATION.md#prediction-export). Exported predictions use the standard COCO results format, and their metadata file carries its own `schema_version` (`1.0.0`).
 
 ## Versioning
 

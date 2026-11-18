@@ -77,6 +77,12 @@ class InvalidPredictionsError(_IssueListError):
     code = "invalid_predictions"
 
 
+class PredictionExportError(_IssueListError):
+    """Predictions could not be exported for an evaluation dataset (images, mapping or output)."""
+
+    code = "prediction_export_failed"
+
+
 class EvaluationUnavailableError(SoccerVisionError):
     """The evaluation dependencies are not installed."""
 

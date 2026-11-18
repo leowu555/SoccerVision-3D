@@ -5,7 +5,7 @@ This is an open-source computer-vision pipeline for soccer videos. It is being b
 **Current status:**
 
 - **Phase 1 (detection platform): complete.** You upload an MP4. A pretrained [RF-DETR](https://github.com/roboflow/rf-detr) model detects the COCO `person` class on every analyzed frame, and you get an annotated, browser-playable video plus versioned JSON artifacts.
-- **Phase 2A (detection evaluation): in progress.** Milestone 2A.1, an offline COCO evaluation module (dataset validation and detection metrics), is complete. The next milestone, **2A.2**, exports RF-DETR predictions over a COCO dataset so that they can be scored.
+- **Phase 2A (detection evaluation): in progress.** Milestones 2A.1 and 2A.2 are complete: an offline COCO evaluation module with dataset validation, detection metrics, and export of RF-DETR predictions over a dataset's images. The next milestone, **2A.3**, adds an evaluation CLI.
 
 > Phase 1 detects *generic people*. It does not identify players, tell players from referees or spectators, assign teams, track identities across frames, or estimate pitch positions. Those are [roadmap](docs/ROADMAP.md) items and are **not implemented**. No detection accuracy has been measured on real soccer footage yet.
 
@@ -57,7 +57,7 @@ The dashboard lists one `failed` video on purpose. That job was interrupted by a
 | Artifacts | `annotated.mp4` (H.264, `yuv420p`, faststart), `detections.json`, and `metadata.json` with a versioned schema ([data contracts](docs/DATA_CONTRACTS.md)) |
 | Frontend | Next.js dashboard, drag-and-drop upload, and an analysis page with synced original and annotated players, a per-frame detection timeline, run metadata, and job status |
 | CLI | `python -m soccervision.cli analyze`, using the same pipeline as the API |
-| Evaluation (offline library) | `soccervision.evaluation`: COCO ground-truth loading and validation, category mapping, dataset provenance and SHA-256, COCO prediction loading, and `person` detection metrics (mAP@0.50, mAP@0.50:0.95, precision, recall, recall by object size) via `pycocotools`. Python API only, with no CLI yet, and so far run only on synthetic test fixtures ([details](docs/MODEL_EVALUATION.md)). |
+| Evaluation (offline library) | `soccervision.evaluation`: COCO ground-truth loading and validation, category mapping, dataset provenance and SHA-256, COCO prediction loading, RF-DETR prediction export (COCO results plus reproducibility metadata), and `person` detection metrics (mAP@0.50, mAP@0.50:0.95, precision, recall, recall by object size) via `pycocotools`. Python API only, with no CLI yet. Metrics have so far been computed only on synthetic test fixtures ([details](docs/MODEL_EVALUATION.md)). |
 
 Frames that are skipped by `inference_stride` are recorded as `"inference_status": "skipped"` with `detections: null` and are labelled **NOT ANALYZED** in the output video. They are never reported as zero detections.
 
@@ -200,7 +200,7 @@ The Dockerfile has not been built in the development environment (Docker was not
 
 - **COCO `person` is not "player".** Referees, coaches, ball kids, and visible spectators are all detected. There is no tracking, so each frame's boxes are independent and `total_detections` counts boxes summed over frames, not unique people.
 - **Small, distant players are missed.** This is most noticeable with Nano at its native 384 px input, for example players near the far goal in wide shots. Small or Medium, or a larger `inference_resolution` (a multiple of 32), helps at a speed cost.
-- Accuracy has not been measured on a labelled soccer dataset. The evaluation module exists, but there is no prediction exporter, evaluation CLI or real soccer evaluation set yet, and it evaluates only the `person` class. See [docs/MODEL_EVALUATION.md](docs/MODEL_EVALUATION.md).
+- Accuracy has not been measured on a labelled soccer dataset. The evaluation module and prediction exporter exist, but there is no evaluation CLI or real soccer evaluation set yet, and only the `person` class is evaluated. See [docs/MODEL_EVALUATION.md](docs/MODEL_EVALUATION.md).
 - Uploads must be MP4. The CLI accepts any container FFmpeg can read. Audio is not carried into the annotated video.
 - Single host only. SQLite and local disk, no authentication, and not designed for public internet exposure.
 - There is no retention policy. Uploads and artifacts stay until you delete the video (the **Delete** button on the analysis page, or `DELETE /api/v1/videos/{id}`).
@@ -208,11 +208,11 @@ The Dockerfile has not been built in the development environment (Docker was not
 
 ## Roadmap
 
-The full plan is in [docs/ROADMAP.md](docs/ROADMAP.md). In short, every phase after 2A.1 is **planned, not implemented**:
+The full plan is in [docs/ROADMAP.md](docs/ROADMAP.md). In short, everything after milestone 2A.2 is **planned, not implemented**:
 
 | Phase | Goal |
 | --- | --- |
-| 2A | Detection evaluation: prediction export (**2A.2, next**), evaluation CLI, a real soccer evaluation set, model comparison |
+| 2A | Detection evaluation: evaluation CLI (**2A.3, next**), a real soccer evaluation set, model comparison |
 | 2B | Multi-object tracking (Kalman filtering, ByteTrack), with camera-motion compensation |
 | 3 | Team classification, pitch calibration (RANSAC homography), 2D tactical replay |
 | 4 | Soccer-specific detection: fine-tuning and teacher-student distillation |

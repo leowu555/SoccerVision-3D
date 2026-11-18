@@ -56,7 +56,7 @@ cd apps/web
 npm run lint && npm run typecheck && npm test && npm run build
 ```
 
-`mypy` checks only the packages listed in `pyproject.toml`; `scripts/` and `tests/` are not type-checked. At the time of writing (November 2026), `pytest` reports 162 passed and 1 skipped (the opt-in integration module), and Vitest runs 26 tests. Treat these counts as a snapshot, not a contract.
+`mypy` checks only the packages listed in `pyproject.toml`; `scripts/` and `tests/` are not type-checked. At the time of writing (November 2026), `pytest` reports 200 passed and 1 skipped (the opt-in integration module), and Vitest runs 26 tests. Treat these counts as a snapshot, not a contract.
 
 CI (`.github/workflows/ci.yml`) runs on every push to `main` and on every pull request:
 
@@ -81,9 +81,9 @@ This test asserts structural properties of real model output (non-synthetic mode
 
 | Directory | What it covers |
 | --- | --- |
-| `tests/unit/` | Schemas and state machine, video probe, decoder and encoder, pipeline (with a fake detector), devices, CLI, RF-DETR weight integrity, COCO dataset validation and detection metrics |
+| `tests/unit/` | Schemas and state machine, video probe, decoder and encoder, pipeline (with a fake detector), devices, CLI, RF-DETR weight integrity, COCO dataset validation, prediction export (scripted fake detector) and detection metrics |
 | `tests/api/` | Uploads (validation, limits), jobs (dispatch, bounded concurrency, crashes, reconciliation, shutdown), results and artifacts |
-| `tests/integration/` | Real RF-DETR inference (skipped by default) |
+| `tests/integration/` | Real RF-DETR inference through the pipeline and the prediction exporter (skipped by default) |
 | `tests/fixtures/evaluation/` | A hand-built synthetic COCO dataset, labelled `SYNTHETIC` |
 | `apps/web/src/lib/*.test.ts` | API client error handling, formatting, validation, timeline helpers |
 

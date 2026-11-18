@@ -1,6 +1,6 @@
 # Roadmap
 
-SoccerVision 3D is built in small, independently testable milestones. **Implemented today:** Phase 1 (the detection platform) and milestone 2A.1 (COCO dataset loading and detection metrics). Everything else on this page is planned work that does not exist in the code. Scope and order will change as evaluation results come in.
+SoccerVision 3D is built in small, independently testable milestones. **Implemented today:** Phase 1 (the detection platform), milestone 2A.1 (COCO dataset loading and detection metrics) and milestone 2A.2 (RF-DETR prediction export). Everything else on this page is planned work that does not exist in the code. Scope and order will change as evaluation results come in.
 
 ## How to read this roadmap
 
@@ -22,7 +22,7 @@ SoccerVision 3D is built in small, independently testable milestones. **Implemen
 | Phase | Goal | Status |
 | --- | --- | --- |
 | 1 | Video → decode → person detection → annotated video and JSON artifacts; API, background jobs, web UI, CLI, tests and CI | **Done** |
-| 2A | Detection evaluation, prediction export, benchmarking and detection optimization | **In progress** (2A.1 done, 2A.2 next) |
+| 2A | Detection evaluation, prediction export, benchmarking and detection optimization | **In progress** (2A.1–2A.2 done, 2A.3 next) |
 | 2B | Multi-object tracking: Kalman filtering, ByteTrack, ReID, local identities and trajectories | Planned |
 | 3 | Team classification, pitch calibration (RANSAC homography) and 2D tactical replay | Planned |
 | 4 | Soccer-specific detection: fine-tuning and knowledge distillation | Planned |
@@ -96,7 +96,7 @@ flowchart LR
 
 ### Suggested near-term order
 
-1. 2A.2 → 2A.3: prediction export, then the evaluation CLI, so that any detector can be benchmarked end to end.
+1. 2A.3: the evaluation CLI on top of the finished prediction export (2A.2), so that any detector can be benchmarked end to end.
 2. 2B.1 → 2B.6: tracking through to visualization, keeping detection-only analysis working.
 3. 2A.4 → 2A.6 as soon as a legally usable labelled dataset is available, which justifies the default detector configuration.
 4. 8.1 → 8.4 in parallel, to give tracking and calibration a ground-truth source.
@@ -128,8 +128,8 @@ flowchart LR
 | ID | Milestone | Kind | Depends on | Status |
 | --- | --- | --- | --- | --- |
 | 2A.1 | COCO ground-truth loader and validation, category mapping, provenance and SHA-256, prediction loading, metrics via `pycocotools`, synthetic fixtures | eval | 1.2 | **Done** |
-| 2A.2 | RF-DETR prediction export: run the existing detector adapter over a COCO dataset's images, convert `xyxy` to COCO `xywh`, map classes to dataset category IDs, keep scores, write standard COCO results JSON plus separate reproducibility metadata. Tested with fake detectors; the production pipeline is unchanged. | eval | 2A.1 | **Next** |
-| 2A.3 | Evaluation CLI command: dataset → predictions → metrics → JSON results, with clear errors | eval | 2A.2 | Planned |
+| 2A.2 | RF-DETR prediction export: run the existing detector adapter over a COCO dataset's images, convert `xyxy` to COCO `xywh`, map classes to dataset category IDs, keep scores, write standard COCO results JSON plus separate reproducibility metadata. Tested with fake detectors; the production pipeline is unchanged. | eval | 2A.1 | **Done** |
+| 2A.3 | Evaluation CLI command: dataset → predictions → metrics → JSON results, with clear errors | eval | 2A.2 | **Next** |
 | 2A.4 | First real soccer evaluation set: legally usable footage, annotation guidelines, held-out split by match, licence and provenance recorded | eval | 2A.3 | Planned |
 | 2A.5 | Model comparison: Nano / Small / Medium × input resolutions, measuring accuracy and latency, throughput and memory | eval | 2A.4 | Planned |
 | 2A.6 | Error analysis (missed small players, false positives on officials and crowds, resolution sensitivity) and a justified default configuration | eval | 2A.5 | Planned |

@@ -4,7 +4,7 @@
 
 **No quantitative accuracy evaluation has been performed, and no real-world soccer detection benchmark exists yet.** SoccerVision 3D has not measured precision, recall or mAP on any labelled soccer dataset. RF-DETR's published COCO results describe general-domain performance only and are not reproduced here.
 
-An **evaluation module** now exists (`soccervision.evaluation`, Phase 2A.1). It loads COCO-format ground truth and predictions and computes detection metrics, but it has only been run on hand-built synthetic test fixtures. No numbers from those fixtures are model accuracy.
+An **evaluation module** now exists (`soccervision.evaluation`, milestones 2A.1 and 2A.2). It loads COCO-format ground truth, exports detector predictions over a dataset's images, and computes detection metrics. Metrics have only been computed on hand-built synthetic test fixtures, and no numbers from those fixtures are model accuracy. Real RF-DETR has only been run through the exporter as an unlabelled smoke test (see [Observed behaviour](#observed-behaviour-single-clip-qualitative)), which checks that the exporter works, not how accurate the model is.
 
 The rest of this file covers the evaluation module, the annotation format, the metric definitions, and how soccer footage can be annotated later. It ends with what *has* been measured so far: runtime and qualitative inspection on a single short clip.
 
@@ -95,17 +95,80 @@ print(metrics.model_dump_json(indent=2))
 | `packages/soccervision/evaluation/dataset.py` | Ground-truth loading, validation, category mapping and provenance |
 | `packages/soccervision/evaluation/predictions.py` | COCO results loading and validation |
 | `packages/soccervision/evaluation/metrics.py` | `evaluate_detections`: builds in-memory COCO indexes, runs `COCOeval`, and derives the thresholded counts from its per-image match records |
+| `packages/soccervision/evaluation/export.py` | `export_predictions` and `write_prediction_export`: run a detector over the dataset's images and write COCO results plus reproducibility metadata |
 | `tests/unit/test_evaluation_*.py`, `tests/fixtures/evaluation/` | Synthetic fixtures and tests. The fixture file and builders are labelled `SYNTHETIC`, and their provenance sets `synthetic: true`. |
+
+### Prediction export
+
+`export_predictions` (milestone 2A.2) runs a detector built by the usual detector factory over every image in a validated dataset and returns COCO results. `write_prediction_export` then writes them to disk.
+
+```python
+from pathlib import Path
+from soccervision.config import DetectorConfig
+from soccervision.evaluation import (
+    DEFAULT_EXPORT_CONFIDENCE,
+    export_predictions,
+    load_coco_dataset,
+    write_prediction_export,
+)
+from soccervision.vision.detection import create_detector
+
+dataset = load_coco_dataset(Path("annotations/test.json"))
+export = export_predictions(
+    dataset,
+    image_root=Path("images"),
+    detector_factory=lambda config: create_detector(
+        config, weights_dir=Path("models"), allow_download=False
+    ),
+    detector_config=DetectorConfig(
+        name="rfdetr-nano", confidence_threshold=DEFAULT_EXPORT_CONFIDENCE
+    ),
+)
+write_prediction_export(
+    export,
+    predictions_path=Path("predictions/rfdetr-nano.json"),
+    metadata_path=Path("predictions/rfdetr-nano.meta.json"),
+)
+```
+
+**Images.**
+- Each `file_name` is resolved under `image_root`. Absolute paths, and paths that resolve outside the root (including through `..` or symlinks), are rejected.
+- Images are read with Pillow in their stored pixel orientation; EXIF rotation is not applied.
+- Each image's size must equal the dataset's `width` × `height`, because otherwise predicted and ground-truth boxes would refer to different pixels.
+- Missing, unreadable and wrongly sized images are all reported together in one `PredictionExportError` (`prediction_export_failed`) *before* the model loads. An image that fails later, during decoding, aborts the export. No image is ever skipped.
+
+**Threshold.** The default threshold is `DEFAULT_EXPORT_CONFIDENCE` = 0.01, because mAP uses every prediction. The threshold is passed to RF-DETR itself and applied again by the exporter. The metadata records it, and adds a warning if it is above 0.05. The application's own default of 0.5 is unchanged.
+
+**Post-processing** matches the Phase 1 pipeline:
+1. Only the detector config's `target_classes` (default `person`) are kept.
+2. Detections scoring below the threshold are dropped.
+3. Boxes are clipped to the image.
+4. Boxes with no area after clipping are dropped.
+
+Clipped and discarded boxes are counted in the metadata.
+
+**Invalid detector output aborts the export:** anything that isn't a sequence of `RawDetection`, a non-finite or out-of-range score, or a box that isn't four finite numbers. The Phase 1 pipeline instead quietly drops non-finite boxes; for evaluation, a broken model output should fail loudly rather than bias the metrics. A detector that raises an exception produces `inference_failed`, naming the image. A detector that can't be created produces `model_unavailable`.
+
+**Category IDs.** Each detector class is written under a dataset category that maps to it. A category with the same name is preferred, otherwise the lowest ID. For example, with `player`, `referee` and `goalkeeper` all mapped to `person`, predictions use `goalkeeper`'s ID if it is the lowest. Evaluation treats all mapped categories alike, so the choice doesn't affect metrics, and it is recorded in the metadata. A detector class that isn't one of the dataset's evaluation classes is an error.
+
+**Outputs.**
+- The predictions file is a plain COCO results list, in dataset image order. An image with no detections simply contributes no entries, and the file can be `[]`.
+- The export is checked by reloading it with `parse_coco_predictions` before it is returned.
+- The metadata file (`artifact_type: coco_predictions_metadata`) is separate. It records:
+  - The dataset name, version, annotation file and its SHA-256, the `synthetic` flag, and the image root.
+  - The full `ModelInfo`: variant, framework versions including `rfdetr`, weights MD5, input resolution and device.
+  - The detector configuration and threshold, and the class-to-category mapping.
+  - Counts (images, images without predictions, predictions, and discarded or clipped boxes).
+  - Timings (model load, total inference, mean per image, start and end time) and the environment.
+  - The SHA-256 of the predictions file's exact bytes, plus any warnings.
+- Both files are written atomically through a temporary file. The metadata is written last, and if writing it fails, the predictions file is removed.
 
 **Not implemented yet** (see [ROADMAP.md](ROADMAP.md#phase-2a-detection-evaluation-and-optimization-in-progress)):
 
-- An RF-DETR prediction exporter that runs the detector over a dataset's images and writes COCO results (milestone 2A.2, next).
-- An evaluation CLI (2A.3).
+- An evaluation CLI (2A.3, next). Until then, export and evaluation are run from Python.
 - A real soccer evaluation set (2A.4).
 - Model comparison and error analysis (2A.5, 2A.6).
 - Any frontend for evaluation.
-
-Until 2A.2 exists, predictions must come from some other source.
 
 ### Annotating real soccer footage later
 
@@ -151,6 +214,13 @@ A CLI run on the original Ogg/Theora file, before H.264 conversion, reported 3,5
 - Because there is no tracking, per-frame counts fluctuate as boxes appear and disappear (visible in the UI timeline).
 
 None of these numbers are accuracy metrics. "Total detections" counts boxes, not correct boxes, and not unique people.
+
+**Prediction export smoke test (2026-11-17).** Five frames (0, 120, 210, 300 and 400) of the same clip were saved as PNGs and listed in an *unlabelled* one-category COCO file, then exported with RF-DETR Nano at 384 px:
+- **At threshold 0.01:** 730 `person` predictions (133–165 per frame). A further 770 detections of other COCO classes were discarded.
+- **At threshold 0.5:** 41 predictions (7–10 per frame), consistent with the per-frame counts above.
+- **Timing:** mean inference was 73–79 ms per image on CPU. The run was sandboxed, so MPS wasn't used.
+
+This shows that low-threshold export keeps the long tail of low-scoring boxes that mAP needs. Without labels, it says nothing about accuracy.
 
 ## Planned evaluation protocol
 

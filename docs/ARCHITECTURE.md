@@ -1,6 +1,6 @@
 # Architecture
 
-This document describes the system as implemented: the Phase 1 detection platform, plus the offline evaluation module from milestone 2A.1. Planned work (tracking, pitch geometry, 3D replay, distributed infrastructure) is described in [ROADMAP.md](ROADMAP.md) only.
+This document describes the system as implemented: the Phase 1 detection platform, plus the offline evaluation module from milestones 2A.1 and 2A.2. Planned work (tracking, pitch geometry, 3D replay, distributed infrastructure) is described in [ROADMAP.md](ROADMAP.md) only.
 
 ## Components
 
@@ -36,7 +36,7 @@ This package has no web dependencies. The API, the CLI and the tests all call th
 | `vision/detection/` | `ObjectDetector` protocol, `RFDETRDetector` (lazy import, pinned weight MD5, warm-up, input resolution divisible by 32) and the factory |
 | `vision/annotation.py` | Draws boxes and the HUD. Skipped frames are explicitly labelled **NOT ANALYZED**. |
 | `pipeline/runner.py` | Orchestration, post-processing, statistics, failure handling and atomic artifact writes |
-| `evaluation/` | Offline detection evaluation: COCO ground-truth loading and validation, COCO predictions, and metrics via `pycocotools` (optional `eval` extra). Not used by the API or the analysis pipeline. See [MODEL_EVALUATION.md](MODEL_EVALUATION.md). |
+| `evaluation/` | Offline detection evaluation: COCO ground-truth loading and validation, COCO predictions, prediction export (any `ObjectDetector` over a dataset's images, with reproducibility metadata), and metrics via `pycocotools` (optional `eval` extra). Not used by the API or the analysis pipeline. See [MODEL_EVALUATION.md](MODEL_EVALUATION.md). |
 | `cli.py` | `soccervision analyze` / `soccervision devices` |
 
 ### `apps/api/soccervision_api`: the service

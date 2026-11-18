@@ -11,6 +11,16 @@ from soccervision.evaluation.dataset import (
     load_coco_dataset,
     parse_coco_dataset,
 )
+from soccervision.evaluation.export import (
+    DEFAULT_EXPORT_CONFIDENCE,
+    CocoPrediction,
+    PredictionExport,
+    PredictionExportMetadata,
+    export_predictions,
+    resolve_category_ids,
+    serialize_predictions,
+    write_prediction_export,
+)
 from soccervision.evaluation.metrics import (
     AREA_RANGES,
     IOU_THRESHOLDS,
@@ -27,8 +37,10 @@ from soccervision.evaluation.predictions import (
 __all__ = [
     "AREA_RANGES",
     "DEFAULT_CATEGORY_MAP",
+    "DEFAULT_EXPORT_CONFIDENCE",
     "IOU_THRESHOLDS",
     "SUPPORTED_CLASSES",
+    "CocoPrediction",
     "DatasetMetadata",
     "DatasetProvenance",
     "DetectionMetrics",
@@ -36,10 +48,16 @@ __all__ = [
     "EvaluationImage",
     "GroundTruthBox",
     "Prediction",
+    "PredictionExport",
+    "PredictionExportMetadata",
     "SizeRecall",
     "evaluate_detections",
+    "export_predictions",
     "load_coco_dataset",
     "load_coco_predictions",
     "parse_coco_dataset",
     "parse_coco_predictions",
+    "resolve_category_ids",
+    "serialize_predictions",
+    "write_prediction_export",
 ]
